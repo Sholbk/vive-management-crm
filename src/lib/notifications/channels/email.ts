@@ -1,16 +1,15 @@
 import "server-only";
-import { Resend } from "resend";
+import sgMail from "@sendgrid/mail";
 import type { ChannelResult, LeadForNotification } from "../types";
 
-let resendClient: Resend | null = null;
+let configured = false;
 
-function getResend(): Resend {
-  if (!resendClient) {
-    const key = process.env.RESEND_API_KEY;
-    if (!key) throw new Error("Missing RESEND_API_KEY");
-    resendClient = new Resend(key);
-  }
-  return resendClient;
+function configureSendgrid(): void {
+  if (configured) return;
+  const key = process.env.SENDGRID_API_KEY;
+  if (!key) throw new Error("Missing SENDGRID_API_KEY");
+  sgMail.setApiKey(key);
+  configured = true;
 }
 
 function formatSubject(lead: LeadForNotification): string {
@@ -50,6 +49,26 @@ function formatHtml(lead: LeadForNotification, crmUrl: string): string {
   `;
 }
 
+function formatText(lead: LeadForNotification, crmUrl: string): string {
+  const name = [lead.first_name, lead.last_name].filter(Boolean).join(" ").trim() || "Unknown";
+  const lines = [
+    `New lead — ${lead.development_name}`,
+    "",
+    `Name: ${name}`,
+    `Email: ${lead.email ?? "—"}`,
+    `Phone: ${lead.phone ?? "—"}`,
+    `Lot: ${lead.lot_title ?? lead.lot_external_id ?? "—"}`,
+    `Source: ${lead.source}`,
+    `UTM Source: ${lead.utm_source ?? "—"}`,
+    `UTM Campaign: ${lead.utm_campaign ?? "—"}`,
+  ];
+  if (lead.message) {
+    lines.push("", "Message:", lead.message);
+  }
+  lines.push("", `Open in CRM: ${crmUrl}/leads/${lead.id}`);
+  return lines.join("\n");
+}
+
 function escape(s: string): string {
   return s
     .replace(/&/g, "&amp;")
@@ -64,43 +83,48 @@ export async function sendLeadEmails(
 ): Promise<ChannelResult[]> {
   if (recipients.length === 0) return [];
 
-  const from = process.env.RESEND_FROM_EMAIL;
+  const from = process.env.SENDGRID_FROM_EMAIL;
   const crmUrl = process.env.NEXT_PUBLIC_CRM_URL ?? "";
   if (!from) {
     return recipients.map((r) => ({
       channel: "email" as const,
       recipient: r,
       status: "failed" as const,
-      error: "Missing RESEND_FROM_EMAIL",
+      error: "Missing SENDGRID_FROM_EMAIL",
     }));
   }
 
-  const resend = getResend();
+  try {
+    configureSendgrid();
+  } catch (err) {
+    const error = err instanceof Error ? err.message : String(err);
+    return recipients.map((r) => ({
+      channel: "email" as const,
+      recipient: r,
+      status: "failed" as const,
+      error,
+    }));
+  }
+
   const subject = formatSubject(lead);
   const html = formatHtml(lead, crmUrl);
+  const text = formatText(lead, crmUrl);
 
   const results = await Promise.all(
     recipients.map(async (to): Promise<ChannelResult> => {
       try {
-        const { data, error } = await resend.emails.send({
+        const [response] = await sgMail.send({
           from,
           to,
           subject,
           html,
+          text,
         });
-        if (error) {
-          return {
-            channel: "email",
-            recipient: to,
-            status: "failed",
-            error: error.message,
-          };
-        }
         return {
           channel: "email",
           recipient: to,
           status: "sent",
-          provider_message_id: data?.id,
+          provider_message_id: response.headers["x-message-id"] as string | undefined,
         };
       } catch (err) {
         return {
