@@ -1,0 +1,45 @@
+import { use } from "react";
+import { sendMagicLink } from "./actions";
+
+export default function LoginForm({
+  searchParamsPromise,
+}: {
+  searchParamsPromise: Promise<{ next?: string; sent?: string; error?: string }>;
+}) {
+  const searchParams = use(searchParamsPromise);
+
+  if (searchParams.sent === "1") {
+    return (
+      <p className="text-sm text-text-muted">
+        Check your email for the sign-in link.
+      </p>
+    );
+  }
+
+  return (
+    <form action={sendMagicLink} className="space-y-3">
+      <label className="block text-sm">
+        <span className="text-text-muted">Email</span>
+        <input
+          type="email"
+          name="email"
+          required
+          className="mt-1 w-full border border-border rounded px-3 py-2 text-sm"
+          autoComplete="email"
+        />
+      </label>
+      {searchParams.next && (
+        <input type="hidden" name="next" value={searchParams.next} />
+      )}
+      {searchParams.error && (
+        <p className="text-sm text-red-600">{searchParams.error}</p>
+      )}
+      <button
+        type="submit"
+        className="w-full bg-brand text-white rounded py-2 text-sm font-medium hover:opacity-90"
+      >
+        Send magic link
+      </button>
+    </form>
+  );
+}
