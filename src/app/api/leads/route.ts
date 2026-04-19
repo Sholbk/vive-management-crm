@@ -102,6 +102,41 @@ export async function POST(req: NextRequest) {
     }
   }
 
+  // 4b. Resolve contact — find existing by email or create a new one.
+  // We do NOT overwrite an existing contact's fields (e.g. contact_type may
+  // have been promoted to 'client' since the last submission).
+  let contactId: string | null = null;
+  if (payload.email) {
+    const { data: existingContact } = await supabase
+      .from("contacts")
+      .select("id")
+      .ilike("email", payload.email)
+      .limit(1)
+      .maybeSingle();
+
+    if (existingContact) {
+      contactId = existingContact.id;
+    } else {
+      const { data: newContact, error: contactErr } = await supabase
+        .from("contacts")
+        .insert({
+          email: payload.email,
+          first_name: payload.firstName,
+          last_name: payload.lastName || null,
+          phone: payload.phone ?? null,
+          contact_source: `${dev.name} website`,
+          contact_type: "lead",
+        })
+        .select("id")
+        .single();
+      if (contactErr) {
+        console.error("Contact insert failed", contactErr);
+      } else if (newContact) {
+        contactId = newContact.id;
+      }
+    }
+  }
+
   // 5. Insert lead
   const ip =
     req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
@@ -111,6 +146,7 @@ export async function POST(req: NextRequest) {
 
   const insertRow = {
     development_id: dev.id,
+    contact_id: contactId,
     lot_id: lotId,
     first_name: payload.firstName,
     last_name: payload.lastName || null,

@@ -3,6 +3,7 @@ import LeadsBoard, {
   type BoardLead,
   type Development,
 } from "@/components/LeadsBoard";
+import AppNav from "@/components/AppNav";
 
 export const dynamic = "force-dynamic";
 
@@ -41,17 +42,8 @@ export default async function LeadsPage({
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 py-8">
-      <header className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-semibold">Leads</h1>
-        <form action="/auth/signout" method="post">
-          <button
-            type="submit"
-            className="text-sm text-text-muted hover:text-text"
-          >
-            Sign out
-          </button>
-        </form>
-      </header>
+      <AppNav current="leads" />
+      <h2 className="text-2xl font-semibold mb-6">Pipeline</h2>
 
       {error && (
         <div className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
