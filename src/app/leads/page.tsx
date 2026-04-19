@@ -2,8 +2,10 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import LeadsBoard, {
   type BoardLead,
   type Development,
+  type AgentOption,
 } from "@/components/LeadsBoard";
 import AppNav from "@/components/AppNav";
+import { getStageLabels } from "@/lib/stage-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -27,7 +29,7 @@ export default async function LeadsPage({
   let query = supabase
     .from("leads")
     .select(
-      `id, first_name, last_name, email, phone, stage, source, budget_max_cents, created_at, development_id,
+      `id, first_name, last_name, email, phone, stage, source, budget_max_cents, assigned_agent_id, created_at, development_id,
        developments ( name, slug )`,
     )
     .order("created_at", { ascending: false })
@@ -39,6 +41,28 @@ export default async function LeadsPage({
   }
 
   const { data: leads, error } = await query.returns<BoardLead[]>();
+  const stageLabels = await getStageLabels(supabase);
+
+  const { data: profilesData } = await supabase
+    .from("profiles")
+    .select("id, full_name, email, role, active")
+    .eq("active", true)
+    .in("role", ["admin", "sales_agent"])
+    .order("full_name", { nullsFirst: false })
+    .returns<
+      {
+        id: string;
+        full_name: string | null;
+        email: string | null;
+        role: string;
+        active: boolean;
+      }[]
+    >();
+
+  const agents: AgentOption[] = (profilesData ?? []).map((p) => ({
+    id: p.id,
+    label: p.full_name || p.email || "Unnamed",
+  }));
 
   return (
     <main className="max-w-[1600px] mx-auto px-4 py-8">
@@ -55,6 +79,8 @@ export default async function LeadsPage({
         leads={leads ?? []}
         developments={developments ?? []}
         selectedDevelopment={selected}
+        stageLabels={stageLabels}
+        agents={agents}
       />
     </main>
   );

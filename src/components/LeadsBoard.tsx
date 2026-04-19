@@ -12,7 +12,8 @@ import {
   type DragEndEvent,
 } from "@dnd-kit/core";
 import { STAGES, type Stage } from "@/app/leads/types";
-import { updateLeadStage } from "@/app/leads/actions";
+import { updateLeadStage, assignLead } from "@/app/leads/actions";
+import type { StageLabelMap } from "@/lib/stage-labels";
 
 export interface BoardLead {
   id: string;
@@ -23,6 +24,7 @@ export interface BoardLead {
   stage: Stage;
   source: string;
   budget_max_cents: number | null;
+  assigned_agent_id: string | null;
   created_at: string;
   development_id: string;
   developments: { name: string; slug: string } | null;
@@ -34,15 +36,10 @@ export interface Development {
   name: string;
 }
 
-const STAGE_LABELS: Record<Stage, string> = {
-  new: "New",
-  contacted: "Contacted",
-  qualified: "Qualified",
-  showing: "Showing",
-  offer: "Offer",
-  closed_won: "Closed Won",
-  closed_lost: "Closed Lost",
-};
+export interface AgentOption {
+  id: string;
+  label: string;
+}
 
 function formatMoney(cents: number | null | undefined): string {
   if (!cents) return "$0";
@@ -53,7 +50,15 @@ function formatMoney(cents: number | null | undefined): string {
   }).format(cents / 100);
 }
 
-function LeadCard({ lead }: { lead: BoardLead }) {
+function LeadCard({
+  lead,
+  agents,
+  onAssign,
+}: {
+  lead: BoardLead;
+  agents: AgentOption[];
+  onAssign: (leadId: string, agentId: string | null) => void;
+}) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: lead.id });
 
@@ -70,24 +75,41 @@ function LeadCard({ lead }: { lead: BoardLead }) {
     <div
       ref={setNodeRef}
       style={style}
-      {...listeners}
-      {...attributes}
-      className={`bg-white border border-border rounded-md p-3 mb-2 shadow-sm cursor-grab active:cursor-grabbing text-sm ${
+      className={`bg-white border border-border rounded-md p-3 mb-2 shadow-sm text-sm ${
         isDragging ? "opacity-50" : ""
       }`}
     >
-      <p className="font-semibold text-text">{name}</p>
-      {lead.email && (
-        <p className="text-text-muted text-xs truncate">{lead.email}</p>
-      )}
-      <div className="flex items-center justify-between mt-2 text-xs text-text-muted">
-        <span>{lead.developments?.name ?? "—"}</span>
-        {lead.budget_max_cents != null && (
-          <span className="font-semibold text-text">
-            {formatMoney(lead.budget_max_cents)}
-          </span>
+      <div
+        {...listeners}
+        {...attributes}
+        className="cursor-grab active:cursor-grabbing"
+      >
+        <p className="font-semibold text-text">{name}</p>
+        {lead.email && (
+          <p className="text-text-muted text-xs truncate">{lead.email}</p>
         )}
+        <div className="flex items-center justify-between mt-2 text-xs text-text-muted">
+          <span>{lead.developments?.name ?? "—"}</span>
+          {lead.budget_max_cents != null && (
+            <span className="font-semibold text-text">
+              {formatMoney(lead.budget_max_cents)}
+            </span>
+          )}
+        </div>
       </div>
+      <select
+        value={lead.assigned_agent_id ?? ""}
+        onChange={(e) => onAssign(lead.id, e.target.value || null)}
+        onPointerDown={(e) => e.stopPropagation()}
+        className="mt-2 w-full text-xs px-2 py-1 border border-border rounded bg-surface-muted focus:outline-none focus:ring-1 focus:ring-brand-accent"
+      >
+        <option value="">Unassigned</option>
+        {agents.map((a) => (
+          <option key={a.id} value={a.id}>
+            {a.label}
+          </option>
+        ))}
+      </select>
     </div>
   );
 }
@@ -95,9 +117,15 @@ function LeadCard({ lead }: { lead: BoardLead }) {
 function StageColumn({
   stage,
   leads,
+  label,
+  agents,
+  onAssign,
 }: {
   stage: Stage;
   leads: BoardLead[];
+  label: string;
+  agents: AgentOption[];
+  onAssign: (leadId: string, agentId: string | null) => void;
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: stage });
   const total = leads.reduce((sum, l) => sum + (l.budget_max_cents ?? 0), 0);
@@ -110,7 +138,7 @@ function StageColumn({
       }`}
     >
       <div className="mb-3">
-        <h3 className="font-semibold text-text">{STAGE_LABELS[stage]}</h3>
+        <h3 className="font-semibold text-text">{label}</h3>
         <p className="text-xs text-text-muted">
           {leads.length} Opportunit{leads.length === 1 ? "y" : "ies"} &bull;{" "}
           {formatMoney(total)}
@@ -118,7 +146,12 @@ function StageColumn({
       </div>
       <div className="min-h-20">
         {leads.map((lead) => (
-          <LeadCard key={lead.id} lead={lead} />
+          <LeadCard
+            key={lead.id}
+            lead={lead}
+            agents={agents}
+            onAssign={onAssign}
+          />
         ))}
       </div>
     </div>
@@ -129,14 +162,33 @@ export default function LeadsBoard({
   leads: initialLeads,
   developments,
   selectedDevelopment,
+  stageLabels,
+  agents,
 }: {
   leads: BoardLead[];
   developments: Development[];
   selectedDevelopment: string;
+  stageLabels: StageLabelMap;
+  agents: AgentOption[];
 }) {
   const router = useRouter();
   const [leads, setLeads] = useState(initialLeads);
   const [, startTransition] = useTransition();
+
+  function handleAssign(leadId: string, agentId: string | null) {
+    setLeads((prev) =>
+      prev.map((l) =>
+        l.id === leadId ? { ...l, assigned_agent_id: agentId } : l,
+      ),
+    );
+    startTransition(async () => {
+      try {
+        await assignLead(leadId, agentId);
+      } catch {
+        router.refresh();
+      }
+    });
+  }
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 4 } }),
   );
@@ -199,7 +251,10 @@ export default function LeadsBoard({
             <StageColumn
               key={stage}
               stage={stage}
+              label={stageLabels[stage]}
               leads={leads.filter((l) => l.stage === stage)}
+              agents={agents}
+              onAssign={handleAssign}
             />
           ))}
         </div>

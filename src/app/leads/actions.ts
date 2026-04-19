@@ -21,3 +21,15 @@ export async function updateLeadStage(leadId: string, newStage: string) {
 
   revalidatePath("/leads");
 }
+
+export async function assignLead(leadId: string, agentId: string | null) {
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("leads")
+    .update({ assigned_agent_id: agentId })
+    .eq("id", leadId);
+
+  if (error) throw new Error(error.message);
+
+  revalidatePath("/leads");
+}

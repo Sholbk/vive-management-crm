@@ -1,7 +1,7 @@
 export default function AppNav({
   current,
 }: {
-  current: "leads" | "contacts" | "reports";
+  current: "leads" | "contacts" | "reports" | "settings";
 }) {
   const linkCls = (active: boolean) =>
     active
@@ -20,6 +20,9 @@ export default function AppNav({
         </a>
         <a href="/reports" className={linkCls(current === "reports")}>
           Reports
+        </a>
+        <a href="/settings" className={linkCls(current === "settings")}>
+          Settings
         </a>
       </nav>
       <form action="/auth/signout" method="post">

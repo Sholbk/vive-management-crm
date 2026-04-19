@@ -1,20 +1,12 @@
 import { formatCents, type PipelineValue } from "@/lib/reports/queries";
-import type { Stage } from "@/app/leads/types";
-
-const STAGE_LABELS: Record<Stage, string> = {
-  new: "New",
-  contacted: "Contacted",
-  qualified: "Qualified",
-  showing: "Showing",
-  offer: "Offer",
-  closed_won: "Closed Won",
-  closed_lost: "Closed Lost",
-};
+import type { StageLabelMap } from "@/lib/stage-labels";
 
 export default function PipelineValuePanel({
   value,
+  stageLabels,
 }: {
   value: PipelineValue;
+  stageLabels: StageLabelMap;
 }) {
   return (
     <section className="bg-white border border-border rounded-lg p-6">
@@ -37,7 +29,7 @@ export default function PipelineValuePanel({
         <tbody>
           {value.byStage.map((row) => (
             <tr key={row.stage} className="border-t border-border">
-              <td className="py-1.5">{STAGE_LABELS[row.stage]}</td>
+              <td className="py-1.5">{stageLabels[row.stage]}</td>
               <td className="py-1.5 text-right">{row.count}</td>
               <td className="py-1.5 text-right">{formatCents(row.sumCents)}</td>
             </tr>

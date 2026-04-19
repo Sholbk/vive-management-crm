@@ -6,6 +6,7 @@ import SourcePanel from "@/components/reports/SourcePanel";
 import DevelopmentPanel from "@/components/reports/DevelopmentPanel";
 import WeeklyNewLeadsPanel from "@/components/reports/WeeklyNewLeadsPanel";
 import { getReportData, type Range } from "@/lib/reports/queries";
+import { getStageLabels } from "@/lib/stage-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -29,10 +30,13 @@ export default async function ReportsPage({
   const range: Range = isRange(params.range) ? params.range : "all";
 
   const supabase = await createSupabaseServerClient();
-  const data = await getReportData(supabase, range).catch((err) => {
-    console.error("Reports load failed", err);
-    return null;
-  });
+  const [data, stageLabels] = await Promise.all([
+    getReportData(supabase, range).catch((err) => {
+      console.error("Reports load failed", err);
+      return null;
+    }),
+    getStageLabels(supabase),
+  ]);
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
@@ -68,10 +72,13 @@ export default async function ReportsPage({
             range
           </p>
 
-          <FunnelPanel funnel={data.funnel} />
+          <FunnelPanel funnel={data.funnel} stageLabels={stageLabels} />
 
           <div className="grid lg:grid-cols-2 gap-4">
-            <PipelineValuePanel value={data.pipelineValue} />
+            <PipelineValuePanel
+              value={data.pipelineValue}
+              stageLabels={stageLabels}
+            />
             <SourcePanel
               bySource={data.bySource}
               byUtmSource={data.byUtmSource}
