@@ -32,14 +32,8 @@ export async function proxy(request: NextRequest) {
   } = await supabase.auth.getUser();
 
   const { pathname } = request.nextUrl;
-  const isPublic =
-    pathname === "/login" ||
-    pathname.startsWith("/auth/") ||
-    pathname.startsWith("/api/leads") ||
-    pathname.startsWith("/_next") ||
-    pathname.startsWith("/favicon");
 
-  if (!user && !isPublic) {
+  if (!user && pathname !== "/login") {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
@@ -53,5 +47,7 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
+  // API routes and /auth/* manage their own sessions; running the proxy's
+  // getUser() call on them just adds a Supabase round-trip per request.
+  matcher: ["/((?!_next/static|_next/image|favicon.ico|api|auth).*)"],
 };

@@ -36,22 +36,26 @@ export default async function ContactDetailPage({
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
-  const { data: contact } = await supabase
-    .from("contacts")
-    .select(
-      "id, first_name, last_name, email, phone, date_of_birth, contact_source, contact_type, notes, created_at",
-    )
-    .eq("id", id)
-    .maybeSingle<Contact>();
+  const [contactResult, leadsResult] = await Promise.all([
+    supabase
+      .from("contacts")
+      .select(
+        "id, first_name, last_name, email, phone, date_of_birth, contact_source, contact_type, notes, created_at",
+      )
+      .eq("id", id)
+      .maybeSingle<Contact>(),
+    supabase
+      .from("leads")
+      .select("id, stage, source, created_at, developments ( name )")
+      .eq("contact_id", id)
+      .order("created_at", { ascending: false })
+      .returns<LinkedLead[]>(),
+  ]);
 
+  const contact = contactResult.data;
   if (!contact) notFound();
 
-  const { data: leads } = await supabase
-    .from("leads")
-    .select("id, stage, source, created_at, developments ( name )")
-    .eq("contact_id", id)
-    .order("created_at", { ascending: false })
-    .returns<LinkedLead[]>();
+  const leads = leadsResult.data;
 
   const name =
     [contact.first_name, contact.last_name].filter(Boolean).join(" ") ||

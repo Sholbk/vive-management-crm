@@ -19,12 +19,34 @@ export default async function LeadsPage({
 
   const supabase = await createSupabaseServerClient();
 
-  const { data: developments } = await supabase
-    .from("developments")
-    .select("id, slug, name")
-    .eq("active", true)
-    .order("name")
-    .returns<Development[]>();
+  // Fetch the three independent lookups in parallel. Leads query follows
+  // because it may need a development id from the first result.
+  const [devsResult, stageLabels, profilesResult] = await Promise.all([
+    supabase
+      .from("developments")
+      .select("id, slug, name")
+      .eq("active", true)
+      .order("name")
+      .returns<Development[]>(),
+    getStageLabels(supabase),
+    supabase
+      .from("profiles")
+      .select("id, full_name, email, role, active")
+      .eq("active", true)
+      .in("role", ["admin", "sales_agent"])
+      .order("full_name", { nullsFirst: false })
+      .returns<
+        {
+          id: string;
+          full_name: string | null;
+          email: string | null;
+          role: string;
+          active: boolean;
+        }[]
+      >(),
+  ]);
+
+  const developments = devsResult.data;
 
   let query = supabase
     .from("leads")
@@ -41,25 +63,8 @@ export default async function LeadsPage({
   }
 
   const { data: leads, error } = await query.returns<BoardLead[]>();
-  const stageLabels = await getStageLabels(supabase);
 
-  const { data: profilesData } = await supabase
-    .from("profiles")
-    .select("id, full_name, email, role, active")
-    .eq("active", true)
-    .in("role", ["admin", "sales_agent"])
-    .order("full_name", { nullsFirst: false })
-    .returns<
-      {
-        id: string;
-        full_name: string | null;
-        email: string | null;
-        role: string;
-        active: boolean;
-      }[]
-    >();
-
-  const agents: AgentOption[] = (profilesData ?? []).map((p) => ({
+  const agents: AgentOption[] = (profilesResult.data ?? []).map((p) => ({
     id: p.id,
     label: p.full_name || p.email || "Unnamed",
   }));
