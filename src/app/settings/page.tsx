@@ -1,7 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import AppNav from "@/components/AppNav";
 import { STAGES } from "@/app/leads/types";
-import { renameStage, updateTeamMember } from "./actions";
+import { renameStage, updateTeamMember, addTeamMember } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -83,22 +83,68 @@ export default async function SettingsPage() {
 
       {/* Team */}
       <section className="bg-white border border-border rounded-lg p-6">
-        <div className="flex items-center justify-between mb-1">
-          <h3 className="text-lg font-semibold">Team</h3>
-          <a
-            href="https://supabase.com/dashboard/project/_/auth/users"
-            target="_blank"
-            rel="noopener"
-            className="text-sm text-brand-accent hover:underline"
-          >
-            + Invite new user (Supabase dashboard) &rarr;
-          </a>
-        </div>
+        <h3 className="text-lg font-semibold mb-1">Team</h3>
         <p className="text-sm text-text-muted mb-4">
-          Invite new people via the Supabase Auth dashboard; they&apos;ll appear
-          here with the default Sales Agent role. Change roles or deactivate
-          below.
+          Add a new salesperson below — they&apos;ll be able to sign in at /login
+          immediately with the email and password you choose, then change
+          their password from their account.
         </p>
+
+        {/* Add member form */}
+        <form
+          action={addTeamMember}
+          className="grid sm:grid-cols-[1fr_1fr_140px_140px_auto] gap-3 items-end mb-6 pb-6 border-b border-border"
+        >
+          <label className="block">
+            <span className="text-xs text-text-muted">Full name</span>
+            <input
+              name="full_name"
+              placeholder="Jane Doe"
+              className="w-full px-3 py-2 border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-accent"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs text-text-muted">Email *</span>
+            <input
+              name="email"
+              type="email"
+              required
+              placeholder="jane@vive.com"
+              className="w-full px-3 py-2 border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-accent"
+            />
+          </label>
+          <label className="block">
+            <span className="text-xs text-text-muted">Role</span>
+            <select
+              name="role"
+              defaultValue="sales_agent"
+              className="w-full px-3 py-2 border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-accent"
+            >
+              {ROLES.map((r) => (
+                <option key={r} value={r}>
+                  {ROLE_LABELS[r]}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="block">
+            <span className="text-xs text-text-muted">Temp password *</span>
+            <input
+              name="password"
+              type="text"
+              required
+              minLength={8}
+              placeholder="min 8 chars"
+              className="w-full px-3 py-2 border border-border rounded-md bg-white focus:outline-none focus:ring-2 focus:ring-brand-accent font-mono text-sm"
+            />
+          </label>
+          <button
+            type="submit"
+            className="px-4 py-2 bg-brand-accent text-white text-sm font-semibold rounded-md hover:opacity-90 whitespace-nowrap"
+          >
+            Add member
+          </button>
+        </form>
 
         {!profiles || profiles.length === 0 ? (
           <p className="text-sm text-text-muted">No team members yet.</p>

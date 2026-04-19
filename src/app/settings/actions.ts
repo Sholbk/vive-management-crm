@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { STAGES } from "@/app/leads/types";
 
 export async function renameStage(formData: FormData) {
@@ -32,6 +33,59 @@ const ALLOWED_ROLES = [
   "property_manager",
   "marketing",
 ] as const;
+
+export async function addTeamMember(formData: FormData) {
+  const email = ((formData.get("email") as string) || "").trim().toLowerCase();
+  const fullName = ((formData.get("full_name") as string) || "").trim() || null;
+  const role = (formData.get("role") as string) || "sales_agent";
+  const password = ((formData.get("password") as string) || "").trim();
+
+  if (!email) throw new Error("Email is required");
+  if (password.length < 8) throw new Error("Password must be at least 8 characters");
+  if (!(ALLOWED_ROLES as readonly string[]).includes(role)) {
+    throw new Error("Invalid role");
+  }
+
+  // Verify the requester is an admin before using the service client.
+  const userClient = await createSupabaseServerClient();
+  const { data: me } = await userClient.auth.getUser();
+  if (!me.user) throw new Error("Not signed in");
+  const { data: myProfile } = await userClient
+    .from("profiles")
+    .select("role")
+    .eq("id", me.user.id)
+    .maybeSingle();
+  if (myProfile?.role !== "admin") {
+    throw new Error("Only admins can add team members");
+  }
+
+  const admin = createSupabaseServiceClient();
+
+  // Create the auth user. email_confirm=true skips the verification email
+  // so the person can log in immediately with the credentials the admin
+  // hands them.
+  const { data: created, error: createErr } = await admin.auth.admin.createUser({
+    email,
+    password,
+    email_confirm: true,
+  });
+
+  if (createErr || !created.user) {
+    throw new Error(createErr?.message || "Failed to create user");
+  }
+
+  // The handle_new_user() trigger already inserted a default profile row.
+  // Patch it with the name and role the admin chose.
+  const { error: profileErr } = await admin
+    .from("profiles")
+    .update({ full_name: fullName, role })
+    .eq("id", created.user.id);
+
+  if (profileErr) throw new Error(profileErr.message);
+
+  revalidatePath("/settings");
+  revalidatePath("/leads");
+}
 
 export async function updateTeamMember(profileId: string, formData: FormData) {
   const role = (formData.get("role") as string) || "sales_agent";
