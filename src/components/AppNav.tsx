@@ -1,4 +1,8 @@
-export default function AppNav({ current }: { current: "leads" | "contacts" }) {
+export default function AppNav({
+  current,
+}: {
+  current: "leads" | "contacts" | "reports";
+}) {
   const linkCls = (active: boolean) =>
     active
       ? "text-text font-semibold border-b-2 border-brand-accent pb-2"
@@ -13,6 +17,9 @@ export default function AppNav({ current }: { current: "leads" | "contacts" }) {
         </a>
         <a href="/contacts" className={linkCls(current === "contacts")}>
           Contacts
+        </a>
+        <a href="/reports" className={linkCls(current === "reports")}>
+          Reports
         </a>
       </nav>
       <form action="/auth/signout" method="post">

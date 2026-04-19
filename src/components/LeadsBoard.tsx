@@ -11,7 +11,8 @@ import {
   useDroppable,
   type DragEndEvent,
 } from "@dnd-kit/core";
-import { STAGES, type Stage, updateLeadStage } from "@/app/leads/actions";
+import { STAGES, type Stage } from "@/app/leads/types";
+import { updateLeadStage } from "@/app/leads/actions";
 
 export interface BoardLead {
   id: string;
