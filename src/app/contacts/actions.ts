@@ -97,13 +97,21 @@ export async function updateContact(contactId: string, formData: FormData) {
     .eq("id", contactId)
     .select("id");
 
-  if (error) throw new Error(error.message);
+  if (error) {
+    const friendly = error.message.includes("duplicate key")
+      ? "Another contact already uses that email address."
+      : error.message;
+    redirect(`/contacts/${contactId}?error=${encodeURIComponent(friendly)}`);
+  }
   if (!updated || updated.length === 0) {
-    throw new Error(
-      "Contact was not updated. Your account may not have permission to edit this contact.",
+    redirect(
+      `/contacts/${contactId}?error=${encodeURIComponent(
+        "Contact was not updated. Your account may not have permission to edit this contact.",
+      )}`,
     );
   }
 
   revalidatePath("/contacts");
   revalidatePath(`/contacts/${contactId}`);
+  redirect(`/contacts/${contactId}?saved=1`);
 }

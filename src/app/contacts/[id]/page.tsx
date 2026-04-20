@@ -31,10 +31,13 @@ type LinkedLead = {
 
 export default async function ContactDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ saved?: string; error?: string }>;
 }) {
   const { id } = await params;
+  const { saved, error: pageError } = await searchParams;
   const supabase = await createSupabaseServerClient();
 
   const [contactResult, leadsResult, agentsResult] = await Promise.all([
@@ -92,6 +95,17 @@ export default async function ContactDetailPage({
       <p className="text-sm text-text-muted mb-6">
         Added {new Date(contact.created_at).toLocaleDateString()}
       </p>
+
+      {saved === "1" && (
+        <div className="mb-6 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+          Saved ✓
+        </div>
+      )}
+      {pageError && (
+        <div className="mb-6 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+          {pageError}
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-[1fr_320px] gap-6">
         <div className="bg-white border border-border rounded-lg p-6">
