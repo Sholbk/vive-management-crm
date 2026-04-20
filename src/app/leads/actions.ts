@@ -66,6 +66,16 @@ export async function updateLead(leadId: string, formData: FormData) {
     ? rawStatus
     : "open";
 
+  const developmentId = trimOrNull(formData.get("development_id"));
+  if (!developmentId) throw new Error("Development is required");
+
+  // Primary dev is excluded from the additional list to keep the mental
+  // model clean (a lead isn't "also interested in" their primary pipeline).
+  const additionalDevelopmentIds = formData
+    .getAll("additional_development_ids")
+    .filter((v): v is string => typeof v === "string" && v.length > 0)
+    .filter((v) => v !== developmentId);
+
   const row = {
     title: trimOrNull(formData.get("title")),
     business_name: trimOrNull(formData.get("business_name")),
@@ -76,6 +86,8 @@ export async function updateLead(leadId: string, formData: FormData) {
     budget_max_cents: parseCents(formData.get("budget_max_cents")),
     assigned_agent_id: trimOrNull(formData.get("assigned_agent_id")),
     source: (formData.get("source") as string) || "other",
+    development_id: developmentId,
+    additional_development_ids: additionalDevelopmentIds,
   };
 
   const supabase = await createSupabaseServerClient();

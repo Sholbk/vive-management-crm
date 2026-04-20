@@ -19,6 +19,7 @@ type Lead = {
   budget_max_cents: number | null;
   assigned_agent_id: string | null;
   development_id: string;
+  additional_development_ids: string[] | null;
   contact_id: string | null;
   created_at: string;
   developments: { name: string } | null;
@@ -30,6 +31,8 @@ type Lead = {
     phone: string | null;
   } | null;
 };
+
+type DevRow = { id: string; name: string };
 
 const SOURCES = [
   { value: "website_form", label: "Website form" },
@@ -58,11 +61,11 @@ export default async function LeadDetailPage({
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
-  const [leadResult, agentsResult, stageLabels] = await Promise.all([
+  const [leadResult, agentsResult, stageLabels, devsResult] = await Promise.all([
     supabase
       .from("leads")
       .select(
-        `id, title, business_name, tags, notes, stage, status, source, budget_max_cents, assigned_agent_id, development_id, contact_id, created_at,
+        `id, title, business_name, tags, notes, stage, status, source, budget_max_cents, assigned_agent_id, development_id, additional_development_ids, contact_id, created_at,
          developments ( name ),
          contacts ( id, first_name, last_name, email, phone )`,
       )
@@ -83,6 +86,12 @@ export default async function LeadDetailPage({
         }[]
       >(),
     getStageLabels(supabase),
+    supabase
+      .from("developments")
+      .select("id, name")
+      .eq("active", true)
+      .order("name")
+      .returns<DevRow[]>(),
   ]);
 
   const lead = leadResult.data;
@@ -104,6 +113,8 @@ export default async function LeadDetailPage({
         .filter(Boolean)
         .join(" ") || "—"
     : "—";
+  const developments = devsResult.data ?? [];
+  const additionalSet = new Set(lead.additional_development_ids ?? []);
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-8">
@@ -166,6 +177,55 @@ export default async function LeadDetailPage({
                 </select>
               </label>
             </div>
+
+            <label className="block">
+              <span className="text-sm font-medium text-text">
+                Development
+                <span className="text-text-muted font-normal">
+                  {" "}
+                  — which pipeline this lead lives in
+                </span>
+              </span>
+              <select
+                name="development_id"
+                defaultValue={lead.development_id}
+                className={inputCls()}
+              >
+                {developments.map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+            </label>
+
+            {developments.length > 1 && (
+              <div>
+                <p className="text-sm font-medium text-text mb-1">
+                  Also interested in
+                  <span className="text-text-muted font-normal">
+                    {" "}
+                    — check any additional developments
+                  </span>
+                </p>
+                <div className="flex flex-wrap gap-3 bg-surface-muted border border-border rounded-md p-3">
+                  {developments.map((d) => (
+                    <label
+                      key={d.id}
+                      className="flex items-center gap-1.5 text-sm"
+                    >
+                      <input
+                        type="checkbox"
+                        name="additional_development_ids"
+                        value={d.id}
+                        defaultChecked={additionalSet.has(d.id)}
+                      />
+                      {d.name}
+                    </label>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="grid sm:grid-cols-2 gap-4">
               <label className="block">
