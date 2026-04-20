@@ -15,7 +15,13 @@ function hasSupabaseSession(request: NextRequest): boolean {
     .some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
 }
 
-const PUBLIC_PATHS = new Set(["/login", "/login/forgot"]);
+const PUBLIC_PATHS = new Set([
+  "/",
+  "/privacy",
+  "/terms",
+  "/login",
+  "/login/forgot",
+]);
 
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -27,7 +33,7 @@ export function proxy(request: NextRequest) {
     return NextResponse.redirect(loginUrl);
   }
 
-  if (hasSession && pathname === "/login") {
+  if (hasSession && (pathname === "/login" || pathname === "/")) {
     return NextResponse.redirect(new URL("/leads", request.url));
   }
 
