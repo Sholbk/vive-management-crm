@@ -21,6 +21,15 @@ export async function createContact(formData: FormData) {
   const email = trimOrNull(formData.get("email"));
   const typeRaw = (formData.get("contact_type") as string) || "lead";
   const contact_type = isContactType(typeRaw) ? typeRaw : "lead";
+  const developmentId = trimOrNull(formData.get("development_id"));
+
+  // A Lead-type contact must be in a development so it can land in that
+  // development's pipeline. Other types don't need one.
+  if (contact_type === "lead" && !developmentId) {
+    throw new Error(
+      "Lead-type contacts need a development so they can appear in the pipeline",
+    );
+  }
 
   const row = {
     first_name: trimOrNull(formData.get("first_name")),
@@ -33,7 +42,7 @@ export async function createContact(formData: FormData) {
     notes: trimOrNull(formData.get("notes")),
   };
 
-  const { data, error } = await supabase
+  const { data: contact, error } = await supabase
     .from("contacts")
     .insert(row)
     .select("id")
@@ -41,8 +50,26 @@ export async function createContact(formData: FormData) {
 
   if (error) throw new Error(error.message);
 
+  // For Lead-type contacts, also create a pipeline entry so they show up
+  // in the Kanban. For other types, we only create the contact.
+  if (contact_type === "lead" && developmentId) {
+    const { error: leadErr } = await supabase.from("leads").insert({
+      development_id: developmentId,
+      contact_id: contact.id,
+      first_name: row.first_name,
+      last_name: row.last_name,
+      email: row.email,
+      phone: row.phone,
+      stage: "new",
+      source: "other",
+      status: "open",
+    });
+    if (leadErr) throw new Error(leadErr.message);
+    revalidatePath("/leads");
+  }
+
   revalidatePath("/contacts");
-  redirect(`/contacts/${data.id}`);
+  redirect(`/contacts/${contact.id}`);
 }
 
 export async function updateContact(contactId: string, formData: FormData) {

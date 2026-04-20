@@ -11,6 +11,11 @@ export interface ContactFormValues {
   notes: string | null;
 }
 
+export interface DevelopmentOption {
+  id: string;
+  name: string;
+}
+
 const TYPE_LABELS: Record<ContactType, string> = {
   lead: "Lead",
   client: "Client",
@@ -26,10 +31,12 @@ export default function ContactForm({
   action,
   values,
   submitLabel,
+  developments,
 }: {
   action: (formData: FormData) => void;
   values?: ContactFormValues;
   submitLabel: string;
+  developments?: DevelopmentOption[];
 }) {
   return (
     <form action={action} className="space-y-4">
@@ -98,6 +105,26 @@ export default function ContactForm({
           </select>
         </label>
       </div>
+
+      {developments && developments.length > 0 && (
+        <label className="block">
+          <span className="text-sm font-medium text-text">
+            Development
+            <span className="text-text-muted font-normal">
+              {" "}
+              — required for Lead-type contacts (puts them in the pipeline)
+            </span>
+          </span>
+          <select name="development_id" defaultValue="" className={inputCls()}>
+            <option value="">— Select a development —</option>
+            {developments.map((d) => (
+              <option key={d.id} value={d.id}>
+                {d.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
 
       <label className="block">
         <span className="text-sm font-medium text-text">
