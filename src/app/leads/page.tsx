@@ -1,4 +1,5 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import LeadsBoard, {
   type BoardLead,
   type Development,
@@ -64,6 +65,21 @@ export default async function LeadsPage({
 
   const { data: leads, error } = await query.returns<BoardLead[]>();
 
+  // TEMP DIAGNOSTIC: compare what the admin's session sees vs what's in the
+  // raw table (service client bypasses RLS). Remove once resolved.
+  const {
+    data: { user: authedUser },
+  } = await supabase.auth.getUser();
+  const { data: myProfile } = await supabase
+    .from("profiles")
+    .select("role, active")
+    .eq("id", authedUser?.id ?? "00000000-0000-0000-0000-000000000000")
+    .maybeSingle();
+  const serviceClient = createSupabaseServiceClient();
+  const { count: rawLeadsCount } = await serviceClient
+    .from("leads")
+    .select("*", { count: "exact", head: true });
+
   const agents: AgentOption[] = (profilesResult.data ?? []).map((p) => ({
     id: p.id,
     label: p.full_name || p.email || "Unnamed",
@@ -73,6 +89,16 @@ export default async function LeadsPage({
     <main className="max-w-[1600px] mx-auto px-4 py-8">
       <AppNav current="leads" />
       <h2 className="text-2xl font-semibold mb-6">Pipeline</h2>
+
+      <div className="mb-4 rounded border border-amber-300 bg-amber-50 p-3 text-xs font-mono text-amber-900">
+        <div>auth.uid: {authedUser?.id ?? "(none)"}</div>
+        <div>
+          my profile: role={myProfile?.role ?? "(none)"}, active=
+          {String(myProfile?.active ?? "(none)")}
+        </div>
+        <div>leads seen by my session: {leads?.length ?? 0}</div>
+        <div>leads in table (service client): {rawLeadsCount ?? 0}</div>
+      </div>
 
       {error && (
         <div className="mb-4 rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">
