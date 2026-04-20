@@ -90,7 +90,7 @@ export default async function LeadDetailPage({
       .select(
         `id, title, business_name, tags, notes, stage, status, source, budget_max_cents, assigned_agent_id, development_id, additional_development_ids, contact_id, created_at,
          developments ( name ),
-         contacts ( id, first_name, last_name, email, phone )`,
+         contacts!contact_id ( id, first_name, last_name, email, phone )`,
       )
       .eq("id", id)
       .maybeSingle<Lead>(),
