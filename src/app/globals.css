@@ -1,13 +1,17 @@
 @import "tailwindcss";
 
+/* Vive Real Estate brand palette:
+   - Deep navy for primary / headings / nav
+   - Warm orange as the CTA accent
+   - Cool off-white backgrounds to match the site */
 :root {
-  --brand: #2d3748;
-  --brand-accent: #3182ce;
-  --surface: #f7fafc;
-  --surface-muted: #edf2f7;
-  --border: #e2e8f0;
-  --text: #1a202c;
-  --text-muted: #4a5568;
+  --brand: #1e3a8a;
+  --brand-accent: #ec6b27;
+  --surface: #f5f7fb;
+  --surface-muted: #eaeef6;
+  --border: #d8dfec;
+  --text: #0f1b3d;
+  --text-muted: #586a92;
 }
 
 @theme inline {
@@ -18,10 +22,13 @@
   --color-border: var(--border);
   --color-text: var(--text);
   --color-text-muted: var(--text-muted);
+  --font-sans: var(--font-poppins), ui-sans-serif, system-ui, -apple-system,
+    sans-serif;
 }
 
 body {
   background: var(--surface);
   color: var(--text);
-  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  font-family: var(--font-poppins), ui-sans-serif, system-ui, -apple-system,
+    sans-serif;
 }
