@@ -22,7 +22,12 @@ type ProfileRow = {
   active: boolean;
 };
 
-export default async function SettingsPage() {
+export default async function SettingsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ error?: string; ok?: string }>;
+}) {
+  const params = await searchParams;
   const supabase = await createSupabaseServerClient();
 
   const [{ data: labels }, { data: profiles }] = await Promise.all([
@@ -46,6 +51,23 @@ export default async function SettingsPage() {
     <main className="max-w-4xl mx-auto px-4 py-8">
       <AppNav current="settings" />
       <h2 className="text-2xl font-semibold mb-6">Settings</h2>
+
+      {params.error && (
+        <div
+          role="alert"
+          className="mb-6 rounded-md border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-800"
+        >
+          {params.error}
+        </div>
+      )}
+      {params.ok && (
+        <div
+          role="status"
+          className="mb-6 rounded-md border border-green-200 bg-green-50 px-4 py-3 text-sm text-green-800"
+        >
+          {params.ok}
+        </div>
+      )}
 
       {/* Stage labels */}
       <section className="bg-white border border-border rounded-lg p-6 mb-6">

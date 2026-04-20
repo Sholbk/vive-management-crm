@@ -11,14 +11,14 @@ export default function LoginPage({
     <main className="min-h-screen bg-surface flex flex-col">
       <header className="max-w-5xl w-full mx-auto px-6 py-4">
         <Link href="/">
-          <Logo size={40} />
+          <Logo size={48} />
         </Link>
       </header>
 
       <div className="flex-1 flex items-center justify-center px-4 pb-16">
         <div className="w-full max-w-sm">
           <div className="flex justify-center mb-6">
-            <Logo size={56} />
+            <Logo size={120} />
           </div>
           <div className="border border-border bg-white rounded-xl p-6 shadow-sm">
             <h1 className="text-xl font-semibold text-text mb-1">

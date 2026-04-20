@@ -58,7 +58,7 @@ export default function HomePage() {
     <main className="min-h-screen bg-surface text-text">
       <header className="max-w-6xl mx-auto px-6 py-5 flex items-center justify-between">
         <Link href="/">
-          <Logo size={40} />
+          <Logo size={56} />
         </Link>
         <nav className="flex items-center gap-6 text-sm">
           <a href="#features" className="text-text-muted hover:text-text">

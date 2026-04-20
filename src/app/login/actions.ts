@@ -1,19 +1,7 @@
 "use server";
 
-import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
-
-async function resolveOrigin(): Promise<string> {
-  const envOrigin = process.env.NEXT_PUBLIC_CRM_URL?.trim();
-  if (envOrigin) return envOrigin.replace(/\/$/, "");
-
-  const h = await headers();
-  const host = h.get("x-forwarded-host") ?? h.get("host");
-  const proto = h.get("x-forwarded-proto") ?? "https";
-  if (host) return `${proto}://${host}`;
-  return "";
-}
 
 export async function signInWithPassword(formData: FormData) {
   const email = String(formData.get("email") ?? "").trim();
@@ -33,24 +21,4 @@ export async function signInWithPassword(formData: FormData) {
     redirect(`/login?error=${encodeURIComponent(error.message)}`);
   }
   redirect(next);
-}
-
-export async function signInWithGoogle(formData: FormData) {
-  const next = String(formData.get("next") ?? "/leads");
-
-  const supabase = await createSupabaseServerClient();
-  const origin = await resolveOrigin();
-  const { data, error } = await supabase.auth.signInWithOAuth({
-    provider: "google",
-    options: {
-      redirectTo: `${origin}/auth/callback?next=${encodeURIComponent(next)}`,
-    },
-  });
-
-  if (error || !data?.url) {
-    redirect(
-      `/login?error=${encodeURIComponent(error?.message ?? "Google sign-in failed")}`,
-    );
-  }
-  redirect(data.url);
 }
