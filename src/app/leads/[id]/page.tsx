@@ -7,8 +7,10 @@ import { getStageLabels } from "@/lib/stage-labels";
 import Activities, {
   type LeadTask,
   type LeadNote,
+  type LeadActivity,
   type LeadAppointment,
   type LeadPayment,
+  type LeadAdditionalContact,
   type ProfileOption,
   type ContactOption,
 } from "@/components/leads/Activities";
@@ -79,6 +81,7 @@ export default async function LeadDetailPage({
     devsResult,
     tasksResult,
     notesResult,
+    activitiesResult,
     appointmentsResult,
     paymentsResult,
     followersResult,
@@ -117,7 +120,9 @@ export default async function LeadDetailPage({
       .returns<DevRow[]>(),
     supabase
       .from("lead_tasks")
-      .select("id, title, due_date, completed, created_at")
+      .select(
+        "id, title, due_date, completed, assigned_to_profile_id, created_at",
+      )
       .eq("lead_id", id)
       .order("completed")
       .order("due_date", { nullsFirst: false })
@@ -129,6 +134,13 @@ export default async function LeadDetailPage({
       .order("created_at", { ascending: false })
       .returns<LeadNote[]>(),
     supabase
+      .from("lead_activities")
+      .select("id, type, body, metadata, occurred_at")
+      .eq("lead_id", id)
+      .neq("type", "note")
+      .order("occurred_at", { ascending: false })
+      .returns<LeadActivity[]>(),
+    supabase
       .from("lead_appointments")
       .select("id, title, scheduled_at, notes, status")
       .eq("lead_id", id)
@@ -136,7 +148,9 @@ export default async function LeadDetailPage({
       .returns<LeadAppointment[]>(),
     supabase
       .from("lead_payments")
-      .select("id, amount_cents, description, status, recorded_at")
+      .select(
+        "id, amount_cents, description, status, recorded_at, payment_method, reference",
+      )
       .eq("lead_id", id)
       .order("recorded_at", { ascending: false })
       .returns<LeadPayment[]>(),
@@ -147,11 +161,14 @@ export default async function LeadDetailPage({
       .returns<{ profile_id: string }[]>(),
     supabase
       .from("lead_additional_contacts")
-      .select("contact_id, contacts ( id, first_name, last_name, email )")
+      .select(
+        "contact_id, relationship, contacts ( id, first_name, last_name, email )",
+      )
       .eq("lead_id", id)
       .returns<
         {
           contact_id: string;
+          relationship: string | null;
           contacts: {
             id: string;
             first_name: string | null;
@@ -219,7 +236,9 @@ export default async function LeadDetailPage({
     role: p.role,
   }));
 
-  const linkedContacts: ContactOption[] = (additionalContactsResult.data ?? [])
+  const linkedContacts: LeadAdditionalContact[] = (
+    additionalContactsResult.data ?? []
+  )
     .filter((r) => r.contacts !== null)
     .map((r) => ({
       id: r.contacts!.id,
@@ -228,6 +247,7 @@ export default async function LeadDetailPage({
           .filter(Boolean)
           .join(" ") || "Unnamed",
       email: r.contacts!.email,
+      relationship: r.relationship,
     }));
 
   const allContacts: ContactOption[] = (allContactsResult.data ?? []).map(
@@ -484,6 +504,7 @@ export default async function LeadDetailPage({
           leadId={lead.id}
           tasks={tasksResult.data ?? []}
           notes={notesResult.data ?? []}
+          activities={activitiesResult.data ?? []}
           appointments={appointmentsResult.data ?? []}
           payments={paymentsResult.data ?? []}
           allProfiles={allProfiles}

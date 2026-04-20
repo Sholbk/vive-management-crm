@@ -23,6 +23,21 @@ export async function updateLeadStage(leadId: string, newStage: string) {
   revalidatePath("/leads");
 }
 
+async function ensureFollower(
+  supabase: Awaited<ReturnType<typeof createSupabaseServerClient>>,
+  leadId: string,
+  profileId: string | null,
+) {
+  if (!profileId) return;
+  // Upsert-ish insert; ignore duplicate-key errors so repeated assigns don't fail.
+  const { error } = await supabase
+    .from("lead_followers")
+    .insert({ lead_id: leadId, profile_id: profileId });
+  if (error && !error.message.toLowerCase().includes("duplicate")) {
+    console.error("Failed to auto-follow on assign", error);
+  }
+}
+
 export async function assignLead(leadId: string, agentId: string | null) {
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
@@ -31,6 +46,8 @@ export async function assignLead(leadId: string, agentId: string | null) {
     .eq("id", leadId);
 
   if (error) throw new Error(error.message);
+
+  await ensureFollower(supabase, leadId, agentId);
 
   revalidatePath("/leads");
 }
@@ -104,6 +121,8 @@ export async function updateLead(leadId: string, formData: FormData) {
       "Lead was not updated. Your account may not have permission to edit this lead.",
     );
   }
+
+  await ensureFollower(supabase, leadId, row.assigned_agent_id);
 
   revalidatePath("/leads");
   revalidatePath(`/leads/${leadId}`);

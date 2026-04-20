@@ -1,7 +1,7 @@
 export default function AppNav({
   current,
 }: {
-  current: "leads" | "contacts" | "reports" | "settings";
+  current: "leads" | "contacts" | "reports" | "settings" | "calendar";
 }) {
   const linkCls = (active: boolean) =>
     active
@@ -17,6 +17,9 @@ export default function AppNav({
         </a>
         <a href="/contacts" className={linkCls(current === "contacts")}>
           Contacts
+        </a>
+        <a href="/calendar" className={linkCls(current === "calendar")}>
+          Calendar
         </a>
         <a href="/reports" className={linkCls(current === "reports")}>
           Reports

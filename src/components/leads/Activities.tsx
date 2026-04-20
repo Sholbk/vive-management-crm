@@ -13,12 +13,14 @@ import {
   addAdditionalContact,
   removeAdditionalContact,
 } from "@/app/leads/[id]/actions";
+import NoteItem from "./NoteItem";
 
 export interface LeadTask {
   id: string;
   title: string;
   due_date: string | null;
   completed: boolean;
+  assigned_to_profile_id: string | null;
   created_at: string;
 }
 
@@ -27,6 +29,14 @@ export interface LeadNote {
   body: string;
   created_at: string;
   author_profile_id: string | null;
+}
+
+export interface LeadActivity {
+  id: string;
+  type: string;
+  body: string | null;
+  metadata: Record<string, unknown>;
+  occurred_at: string;
 }
 
 export interface LeadAppointment {
@@ -43,6 +53,15 @@ export interface LeadPayment {
   description: string | null;
   status: string;
   recorded_at: string;
+  payment_method: string | null;
+  reference: string | null;
+}
+
+export interface LeadAdditionalContact {
+  id: string;
+  label: string;
+  email: string | null;
+  relationship: string | null;
 }
 
 export interface ProfileOption {
@@ -56,6 +75,8 @@ export interface ContactOption {
   label: string;
   email: string | null;
 }
+
+const RELATIONSHIPS = ["spouse", "partner", "parent", "child", "sibling", "other"];
 
 function formatMoney(cents: number): string {
   return new Intl.NumberFormat("en-US", {
@@ -73,6 +94,13 @@ function fmtDate(iso: string): string {
   return new Date(iso).toLocaleDateString();
 }
 
+function isOverdue(dueDate: string | null, completed: boolean): boolean {
+  if (completed || !dueDate) return false;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return new Date(dueDate) < today;
+}
+
 const inputCls =
   "px-3 py-2 border border-border rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent";
 const btnPrimary =
@@ -85,25 +113,40 @@ const btnPrimary =
 function TasksSection({
   leadId,
   tasks,
+  profiles,
 }: {
   leadId: string;
   tasks: LeadTask[];
+  profiles: ProfileOption[];
 }) {
+  const profileMap = new Map(profiles.map((p) => [p.id, p.label]));
   return (
     <section className="bg-white border border-border rounded-lg p-5">
       <h3 className="text-lg font-semibold mb-3">Tasks</h3>
 
       <form
         action={addTask.bind(null, leadId)}
-        className="flex flex-wrap gap-2 mb-4"
+        className="grid sm:grid-cols-[1fr_140px_200px_auto] gap-2 mb-4 items-start"
       >
         <input
           name="title"
           placeholder="New task"
           required
-          className={`${inputCls} flex-1 min-w-40`}
+          className={inputCls}
         />
         <input name="due_date" type="date" className={inputCls} />
+        <select
+          name="assigned_to_profile_id"
+          defaultValue=""
+          className={inputCls}
+        >
+          <option value="">Unassigned</option>
+          {profiles.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
         <button type="submit" className={btnPrimary}>
           Add
         </button>
@@ -116,10 +159,16 @@ function TasksSection({
           {tasks.map((t) => {
             const toggle = toggleTask.bind(null, leadId, t.id, t.completed);
             const remove = deleteTask.bind(null, leadId, t.id);
+            const overdue = isOverdue(t.due_date, t.completed);
+            const assignee = t.assigned_to_profile_id
+              ? profileMap.get(t.assigned_to_profile_id)
+              : null;
             return (
               <li
                 key={t.id}
-                className="flex items-center gap-3 py-1.5 border-b border-border last:border-0"
+                className={`flex items-center gap-3 py-1.5 border-b border-border last:border-0 ${
+                  overdue ? "bg-red-50 rounded -mx-2 px-2" : ""
+                }`}
               >
                 <form action={toggle}>
                   <button
@@ -140,11 +189,15 @@ function TasksSection({
                   >
                     {t.title}
                   </p>
-                  {t.due_date && (
-                    <p className="text-xs text-text-muted">
-                      Due {fmtDate(t.due_date)}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-2 text-xs text-text-muted">
+                    {t.due_date && (
+                      <span className={overdue ? "text-red-600 font-semibold" : ""}>
+                        Due {fmtDate(t.due_date)}
+                        {overdue ? " • Overdue" : ""}
+                      </span>
+                    )}
+                    {assignee && <span>• {assignee}</span>}
+                  </div>
                 </div>
                 <form action={remove}>
                   <button
@@ -164,19 +217,54 @@ function TasksSection({
 }
 
 // =============================================================================
-// Notes
+// Notes (merged timeline: manual notes + system activities)
 // =============================================================================
 
 function NotesSection({
   leadId,
   notes,
+  activities,
 }: {
   leadId: string;
   notes: LeadNote[];
+  activities: LeadActivity[];
 }) {
+  type TimelineItem =
+    | {
+        kind: "note";
+        id: string;
+        body: string;
+        occurredAt: string;
+      }
+    | {
+        kind: "activity";
+        id: string;
+        type: string;
+        body: string | null;
+        metadata: Record<string, unknown>;
+        occurredAt: string;
+      };
+
+  const timeline: TimelineItem[] = [
+    ...notes.map((n) => ({
+      kind: "note" as const,
+      id: n.id,
+      body: n.body,
+      occurredAt: n.created_at,
+    })),
+    ...activities.map((a) => ({
+      kind: "activity" as const,
+      id: a.id,
+      type: a.type,
+      body: a.body,
+      metadata: a.metadata,
+      occurredAt: a.occurred_at,
+    })),
+  ].sort((a, b) => b.occurredAt.localeCompare(a.occurredAt));
+
   return (
     <section className="bg-white border border-border rounded-lg p-5">
-      <h3 className="text-lg font-semibold mb-3">Notes timeline</h3>
+      <h3 className="text-lg font-semibold mb-3">Notes &amp; Timeline</h3>
 
       <form
         action={addNote.bind(null, leadId)}
@@ -194,31 +282,45 @@ function NotesSection({
         </button>
       </form>
 
-      {notes.length === 0 ? (
-        <p className="text-sm text-text-muted">No notes yet.</p>
+      {timeline.length === 0 ? (
+        <p className="text-sm text-text-muted">No activity yet.</p>
       ) : (
         <ul className="space-y-3">
-          {notes.map((n) => {
-            const remove = deleteNote.bind(null, leadId, n.id);
+          {timeline.map((item) => {
+            if (item.kind === "note") {
+              return (
+                <NoteItem
+                  key={`n-${item.id}`}
+                  leadId={leadId}
+                  noteId={item.id}
+                  body={item.body}
+                  createdAt={item.occurredAt}
+                  deleteAction={deleteNote.bind(null, leadId, item.id)}
+                />
+              );
+            }
+            const m = item.metadata ?? {};
+            const fromStage =
+              typeof m.from === "string" ? (m.from as string) : null;
+            const toStage =
+              typeof m.to === "string" ? (m.to as string) : null;
+            const label =
+              item.type === "stage_change"
+                ? `Stage changed ${fromStage ? `from ${fromStage} ` : ""}to ${
+                    toStage ?? "—"
+                  }`
+                : item.type === "assignment"
+                  ? "Assignment changed"
+                  : `${item.type}${item.body ? `: ${item.body}` : ""}`;
             return (
               <li
-                key={n.id}
-                className="border-l-2 border-brand-accent pl-3 py-1"
+                key={`a-${item.id}`}
+                className="border-l-2 border-text-muted pl-3 py-1 opacity-80"
               >
-                <p className="text-sm whitespace-pre-wrap">{n.body}</p>
-                <div className="flex items-center gap-3 mt-1">
-                  <span className="text-xs text-text-muted">
-                    {fmtDateTime(n.created_at)}
-                  </span>
-                  <form action={remove} className="inline">
-                    <button
-                      type="submit"
-                      className="text-xs text-text-muted hover:text-red-600"
-                    >
-                      Delete
-                    </button>
-                  </form>
-                </div>
+                <p className="text-sm italic text-text-muted">{label}</p>
+                <span className="text-xs text-text-muted">
+                  {fmtDateTime(item.occurredAt)}
+                </span>
               </li>
             );
           })}
@@ -380,7 +482,7 @@ function PaymentsSection({
 
       <form
         action={addPayment.bind(null, leadId)}
-        className="grid sm:grid-cols-[1fr_1fr_140px_140px_auto] gap-2 mb-4 items-start"
+        className="grid sm:grid-cols-[1fr_1fr_140px_140px] gap-2 mb-2 items-start"
       >
         <input
           name="amount_cents"
@@ -395,21 +497,34 @@ function PaymentsSection({
           placeholder="Description"
           className={inputCls}
         />
+        <select name="payment_method" defaultValue="" className={inputCls}>
+          <option value="">Method</option>
+          <option value="cash">Cash</option>
+          <option value="check">Check</option>
+          <option value="card">Card</option>
+          <option value="wire">Wire</option>
+          <option value="other">Other</option>
+        </select>
+        <input
+          name="reference"
+          placeholder="Reference # (optional)"
+          className={inputCls}
+        />
         <select name="status" defaultValue="received" className={inputCls}>
           <option value="received">Received</option>
           <option value="pending">Pending</option>
           <option value="refunded">Refunded</option>
         </select>
         <input name="recorded_at" type="date" className={inputCls} />
-        <button type="submit" className={btnPrimary}>
-          Add
+        <button type="submit" className={`${btnPrimary} sm:col-span-2`}>
+          Add payment
         </button>
       </form>
 
       {payments.length === 0 ? (
         <p className="text-sm text-text-muted">No payments recorded.</p>
       ) : (
-        <ul className="space-y-2">
+        <ul className="space-y-2 mt-4">
           {payments.map((p) => {
             const remove = deletePayment.bind(null, leadId, p.id);
             return (
@@ -422,7 +537,15 @@ function PaymentsSection({
                 </span>
                 <span className="flex-1 text-text-muted">
                   {p.description ?? "—"}
+                  {p.reference && (
+                    <span className="text-xs ml-1 font-mono">({p.reference})</span>
+                  )}
                 </span>
+                {p.payment_method && (
+                  <span className="text-xs text-text-muted capitalize">
+                    {p.payment_method}
+                  </span>
+                )}
                 <span
                   className={`text-xs px-2 py-0.5 rounded ${
                     p.status === "received"
@@ -472,7 +595,7 @@ function FollowersSection({
     <section className="bg-white border border-border rounded-lg p-5">
       <h3 className="text-lg font-semibold mb-1">Followers</h3>
       <p className="text-sm text-text-muted mb-3">
-        People who want updates on this lead.
+        People who want updates on this lead. Owners are auto-followed.
       </p>
       <div className="flex flex-wrap gap-2">
         {allProfiles.map((p) => {
@@ -509,7 +632,7 @@ function AdditionalContactsSection({
   primaryContactId,
 }: {
   leadId: string;
-  linked: ContactOption[];
+  linked: LeadAdditionalContact[];
   allContacts: ContactOption[];
   primaryContactId: string | null;
 }) {
@@ -527,13 +650,21 @@ function AdditionalContactsSection({
 
       <form
         action={addAdditionalContact.bind(null, leadId)}
-        className="flex gap-2 mb-4"
+        className="grid sm:grid-cols-[1fr_160px_auto] gap-2 mb-4"
       >
-        <select name="contact_id" required className={`${inputCls} flex-1`}>
+        <select name="contact_id" required className={inputCls}>
           <option value="">— Select a contact —</option>
           {available.map((c) => (
             <option key={c.id} value={c.id}>
               {c.label} {c.email ? `(${c.email})` : ""}
+            </option>
+          ))}
+        </select>
+        <select name="relationship" defaultValue="" className={inputCls}>
+          <option value="">Relationship</option>
+          {RELATIONSHIPS.map((r) => (
+            <option key={r} value={r}>
+              {r.charAt(0).toUpperCase() + r.slice(1)}
             </option>
           ))}
         </select>
@@ -559,6 +690,11 @@ function AdditionalContactsSection({
                 >
                   {c.label}
                 </a>
+                {c.relationship && (
+                  <span className="text-xs text-text-muted capitalize">
+                    {c.relationship}
+                  </span>
+                )}
                 {c.email && (
                   <span className="text-xs text-text-muted">{c.email}</span>
                 )}
@@ -587,6 +723,7 @@ export default function Activities({
   leadId,
   tasks,
   notes,
+  activities,
   appointments,
   payments,
   allProfiles,
@@ -598,18 +735,19 @@ export default function Activities({
   leadId: string;
   tasks: LeadTask[];
   notes: LeadNote[];
+  activities: LeadActivity[];
   appointments: LeadAppointment[];
   payments: LeadPayment[];
   allProfiles: ProfileOption[];
   followerIds: string[];
-  linkedContacts: ContactOption[];
+  linkedContacts: LeadAdditionalContact[];
   allContacts: ContactOption[];
   primaryContactId: string | null;
 }) {
   return (
     <div className="space-y-4">
-      <TasksSection leadId={leadId} tasks={tasks} />
-      <NotesSection leadId={leadId} notes={notes} />
+      <TasksSection leadId={leadId} tasks={tasks} profiles={allProfiles} />
+      <NotesSection leadId={leadId} notes={notes} activities={activities} />
       <AppointmentsSection leadId={leadId} appointments={appointments} />
       <PaymentsSection leadId={leadId} payments={payments} />
       <FollowersSection

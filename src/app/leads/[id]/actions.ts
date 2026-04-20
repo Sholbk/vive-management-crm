@@ -26,11 +26,15 @@ export async function addTask(leadId: string, formData: FormData) {
   const title = trim(formData.get("title"));
   if (!title) throw new Error("Task title required");
   const due = trim(formData.get("due_date"));
+  const assignedTo = trim(formData.get("assigned_to_profile_id"));
 
   const supabase = await createSupabaseServerClient();
-  const { error } = await supabase
-    .from("lead_tasks")
-    .insert({ lead_id: leadId, title, due_date: due });
+  const { error } = await supabase.from("lead_tasks").insert({
+    lead_id: leadId,
+    title,
+    due_date: due,
+    assigned_to_profile_id: assignedTo,
+  });
   if (error) throw new Error(error.message);
 
   revalidatePath(`/leads/${leadId}`);
@@ -77,6 +81,19 @@ export async function addNote(leadId: string, formData: FormData) {
 export async function deleteNote(leadId: string, noteId: string) {
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase.from("lead_notes").delete().eq("id", noteId);
+  if (error) throw new Error(error.message);
+  revalidatePath(`/leads/${leadId}`);
+}
+
+export async function updateNote(leadId: string, noteId: string, formData: FormData) {
+  const body = trim(formData.get("body"));
+  if (!body) throw new Error("Note body required");
+
+  const supabase = await createSupabaseServerClient();
+  const { error } = await supabase
+    .from("lead_notes")
+    .update({ body })
+    .eq("id", noteId);
   if (error) throw new Error(error.message);
   revalidatePath(`/leads/${leadId}`);
 }
@@ -140,6 +157,8 @@ export async function addPayment(leadId: string, formData: FormData) {
   const description = trim(formData.get("description"));
   const status = (formData.get("status") as string) || "received";
   const recordedAt = trim(formData.get("recorded_at"));
+  const paymentMethod = trim(formData.get("payment_method"));
+  const reference = trim(formData.get("reference"));
 
   const supabase = await createSupabaseServerClient();
   const row: Record<string, unknown> = {
@@ -147,6 +166,8 @@ export async function addPayment(leadId: string, formData: FormData) {
     amount_cents: amount,
     description,
     status,
+    payment_method: paymentMethod,
+    reference,
   };
   if (recordedAt) row.recorded_at = recordedAt;
 
@@ -198,11 +219,12 @@ export async function toggleFollower(
 export async function addAdditionalContact(leadId: string, formData: FormData) {
   const contactId = trim(formData.get("contact_id"));
   if (!contactId) throw new Error("Contact required");
+  const relationship = trim(formData.get("relationship"));
 
   const supabase = await createSupabaseServerClient();
   const { error } = await supabase
     .from("lead_additional_contacts")
-    .insert({ lead_id: leadId, contact_id: contactId });
+    .insert({ lead_id: leadId, contact_id: contactId, relationship });
   if (error && !error.message.includes("duplicate")) throw new Error(error.message);
   revalidatePath(`/leads/${leadId}`);
 }
