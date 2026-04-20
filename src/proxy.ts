@@ -15,11 +15,13 @@ function hasSupabaseSession(request: NextRequest): boolean {
     .some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
 }
 
+const PUBLIC_PATHS = new Set(["/login", "/login/forgot"]);
+
 export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   const hasSession = hasSupabaseSession(request);
 
-  if (!hasSession && pathname !== "/login") {
+  if (!hasSession && !PUBLIC_PATHS.has(pathname)) {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);

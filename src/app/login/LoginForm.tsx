@@ -45,6 +45,12 @@ export default function LoginForm({
       >
         Sign in
       </button>
+      <a
+        href="/login/forgot"
+        className="block text-center text-xs text-text-muted hover:text-text"
+      >
+        Forgot password?
+      </a>
     </form>
   );
 }
