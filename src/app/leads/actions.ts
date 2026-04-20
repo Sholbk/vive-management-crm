@@ -33,3 +33,65 @@ export async function assignLead(leadId: string, agentId: string | null) {
 
   revalidatePath("/leads");
 }
+
+function trimOrNull(v: FormDataEntryValue | null): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  return t.length > 0 ? t : null;
+}
+
+function parseCents(v: FormDataEntryValue | null): number | null {
+  if (typeof v !== "string") return null;
+  const clean = v.replace(/[^0-9.]/g, "").trim();
+  if (!clean) return null;
+  const dollars = Number(clean);
+  if (Number.isNaN(dollars)) return null;
+  return Math.round(dollars * 100);
+}
+
+function parseTags(v: FormDataEntryValue | null): string[] {
+  if (typeof v !== "string") return [];
+  return v
+    .split(",")
+    .map((s) => s.trim())
+    .filter((s) => s.length > 0);
+}
+
+export async function updateLead(leadId: string, formData: FormData) {
+  const rawStage = (formData.get("stage") as string) || "new";
+  if (!isStage(rawStage)) throw new Error(`Invalid stage: ${rawStage}`);
+
+  const rawStatus = (formData.get("status") as string) || "open";
+  const validStatus = ["open", "archived", "duplicate"].includes(rawStatus)
+    ? rawStatus
+    : "open";
+
+  const row = {
+    title: trimOrNull(formData.get("title")),
+    business_name: trimOrNull(formData.get("business_name")),
+    tags: parseTags(formData.get("tags")),
+    notes: trimOrNull(formData.get("notes")),
+    stage: rawStage,
+    status: validStatus,
+    budget_max_cents: parseCents(formData.get("budget_max_cents")),
+    assigned_agent_id: trimOrNull(formData.get("assigned_agent_id")),
+    source: (formData.get("source") as string) || "other",
+  };
+
+  const supabase = await createSupabaseServerClient();
+  const { data: updated, error } = await supabase
+    .from("leads")
+    .update(row)
+    .eq("id", leadId)
+    .select("id");
+
+  if (error) throw new Error(error.message);
+  if (!updated || updated.length === 0) {
+    throw new Error(
+      "Lead was not updated. Your account may not have permission to edit this lead.",
+    );
+  }
+
+  revalidatePath("/leads");
+  revalidatePath(`/leads/${leadId}`);
+}

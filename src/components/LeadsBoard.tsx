@@ -84,7 +84,16 @@ function LeadCard({
         {...attributes}
         className="cursor-grab active:cursor-grabbing"
       >
-        <p className="font-semibold text-text">{name}</p>
+        <div className="flex items-start justify-between gap-2">
+          <p className="font-semibold text-text">{name}</p>
+          <a
+            href={`/leads/${lead.id}`}
+            onPointerDown={(e) => e.stopPropagation()}
+            className="text-xs text-brand-accent hover:underline shrink-0"
+          >
+            Edit
+          </a>
+        </div>
         {lead.email && (
           <p className="text-text-muted text-xs truncate">{lead.email}</p>
         )}
