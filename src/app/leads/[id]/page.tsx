@@ -4,6 +4,14 @@ import AppNav from "@/components/AppNav";
 import { STAGES, type Stage } from "@/app/leads/types";
 import { updateLead } from "../actions";
 import { getStageLabels } from "@/lib/stage-labels";
+import Activities, {
+  type LeadTask,
+  type LeadNote,
+  type LeadAppointment,
+  type LeadPayment,
+  type ProfileOption,
+  type ContactOption,
+} from "@/components/leads/Activities";
 
 export const dynamic = "force-dynamic";
 
@@ -64,7 +72,19 @@ export default async function LeadDetailPage({
   const { saved } = await searchParams;
   const supabase = await createSupabaseServerClient();
 
-  const [leadResult, agentsResult, stageLabels, devsResult] = await Promise.all([
+  const [
+    leadResult,
+    agentsResult,
+    stageLabels,
+    devsResult,
+    tasksResult,
+    notesResult,
+    appointmentsResult,
+    paymentsResult,
+    followersResult,
+    additionalContactsResult,
+    allContactsResult,
+  ] = await Promise.all([
     supabase
       .from("leads")
       .select(
@@ -95,6 +115,64 @@ export default async function LeadDetailPage({
       .eq("active", true)
       .order("name")
       .returns<DevRow[]>(),
+    supabase
+      .from("lead_tasks")
+      .select("id, title, due_date, completed, created_at")
+      .eq("lead_id", id)
+      .order("completed")
+      .order("due_date", { nullsFirst: false })
+      .returns<LeadTask[]>(),
+    supabase
+      .from("lead_notes")
+      .select("id, body, created_at, author_profile_id")
+      .eq("lead_id", id)
+      .order("created_at", { ascending: false })
+      .returns<LeadNote[]>(),
+    supabase
+      .from("lead_appointments")
+      .select("id, title, scheduled_at, notes, status")
+      .eq("lead_id", id)
+      .order("scheduled_at", { ascending: false })
+      .returns<LeadAppointment[]>(),
+    supabase
+      .from("lead_payments")
+      .select("id, amount_cents, description, status, recorded_at")
+      .eq("lead_id", id)
+      .order("recorded_at", { ascending: false })
+      .returns<LeadPayment[]>(),
+    supabase
+      .from("lead_followers")
+      .select("profile_id")
+      .eq("lead_id", id)
+      .returns<{ profile_id: string }[]>(),
+    supabase
+      .from("lead_additional_contacts")
+      .select("contact_id, contacts ( id, first_name, last_name, email )")
+      .eq("lead_id", id)
+      .returns<
+        {
+          contact_id: string;
+          contacts: {
+            id: string;
+            first_name: string | null;
+            last_name: string | null;
+            email: string | null;
+          } | null;
+        }[]
+      >(),
+    supabase
+      .from("contacts")
+      .select("id, first_name, last_name, email")
+      .order("first_name", { nullsFirst: false })
+      .limit(500)
+      .returns<
+        {
+          id: string;
+          first_name: string | null;
+          last_name: string | null;
+          email: string | null;
+        }[]
+      >(),
   ]);
 
   const lead = leadResult.data;
@@ -118,6 +196,33 @@ export default async function LeadDetailPage({
     : "—";
   const developments = devsResult.data ?? [];
   const additionalSet = new Set(lead.additional_development_ids ?? []);
+
+  const followerIds = (followersResult.data ?? []).map((r) => r.profile_id);
+  const allProfiles: ProfileOption[] = (agentsResult.data ?? []).map((p) => ({
+    id: p.id,
+    label: p.full_name || p.email || "Unnamed",
+    role: p.role,
+  }));
+
+  const linkedContacts: ContactOption[] = (additionalContactsResult.data ?? [])
+    .filter((r) => r.contacts !== null)
+    .map((r) => ({
+      id: r.contacts!.id,
+      label:
+        [r.contacts!.first_name, r.contacts!.last_name]
+          .filter(Boolean)
+          .join(" ") || "Unnamed",
+      email: r.contacts!.email,
+    }));
+
+  const allContacts: ContactOption[] = (allContactsResult.data ?? []).map(
+    (c) => ({
+      id: c.id,
+      label:
+        [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unnamed",
+      email: c.email,
+    }),
+  );
 
   return (
     <main className="max-w-5xl mx-auto px-4 py-8">
@@ -356,18 +461,22 @@ export default async function LeadDetailPage({
             )}
           </div>
 
-          <div className="bg-white border border-border rounded-lg p-4">
-            <h3 className="font-semibold text-text mb-2">Coming soon</h3>
-            <ul className="text-xs text-text-muted space-y-1 list-disc list-inside">
-              <li>Book/Update Appointment</li>
-              <li>Tasks</li>
-              <li>Notes timeline (activity feed)</li>
-              <li>Payments</li>
-              <li>Followers</li>
-              <li>Additional Contacts</li>
-            </ul>
-          </div>
         </aside>
+      </div>
+
+      <div className="mt-6">
+        <Activities
+          leadId={lead.id}
+          tasks={tasksResult.data ?? []}
+          notes={notesResult.data ?? []}
+          appointments={appointmentsResult.data ?? []}
+          payments={paymentsResult.data ?? []}
+          allProfiles={allProfiles}
+          followerIds={followerIds}
+          linkedContacts={linkedContacts}
+          allContacts={allContacts}
+          primaryContactId={lead.contact_id}
+        />
       </div>
     </main>
   );
