@@ -40,6 +40,7 @@ export async function createContact(formData: FormData) {
     contact_source: trimOrNull(formData.get("contact_source")),
     contact_type,
     notes: trimOrNull(formData.get("notes")),
+    assigned_agent_id: trimOrNull(formData.get("assigned_agent_id")),
   };
 
   const { data: contact, error } = await supabase
@@ -87,6 +88,7 @@ export async function updateContact(contactId: string, formData: FormData) {
     contact_source: trimOrNull(formData.get("contact_source")),
     contact_type,
     notes: trimOrNull(formData.get("notes")),
+    assigned_agent_id: trimOrNull(formData.get("assigned_agent_id")),
   };
 
   const { error } = await supabase

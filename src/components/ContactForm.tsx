@@ -9,11 +9,18 @@ export interface ContactFormValues {
   contact_source: string | null;
   contact_type: ContactType;
   notes: string | null;
+  assigned_agent_id?: string | null;
 }
 
 export interface DevelopmentOption {
   id: string;
   name: string;
+}
+
+export interface AgentOption {
+  id: string;
+  label: string;
+  role: string;
 }
 
 const TYPE_LABELS: Record<ContactType, string> = {
@@ -32,11 +39,13 @@ export default function ContactForm({
   values,
   submitLabel,
   developments,
+  agents,
 }: {
   action: (formData: FormData) => void;
   values?: ContactFormValues;
   submitLabel: string;
   developments?: DevelopmentOption[];
+  agents?: AgentOption[];
 }) {
   return (
     <form action={action} className="space-y-4">
@@ -120,6 +129,26 @@ export default function ContactForm({
             {developments.map((d) => (
               <option key={d.id} value={d.id}>
                 {d.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
+      {agents && agents.length > 0 && (
+        <label className="block">
+          <span className="text-sm font-medium text-text">
+            Assigned Salesperson
+          </span>
+          <select
+            name="assigned_agent_id"
+            defaultValue={values?.assigned_agent_id ?? ""}
+            className={inputCls()}
+          >
+            <option value="">— Unassigned —</option>
+            {agents.map((a) => (
+              <option key={a.id} value={a.id}>
+                {a.label} {a.role === "admin" ? "(Admin)" : ""}
               </option>
             ))}
           </select>

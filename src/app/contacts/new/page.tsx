@@ -1,5 +1,8 @@
 import AppNav from "@/components/AppNav";
-import ContactForm, { type DevelopmentOption } from "@/components/ContactForm";
+import ContactForm, {
+  type DevelopmentOption,
+  type AgentOption,
+} from "@/components/ContactForm";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import { createContact } from "../actions";
 
@@ -7,12 +10,29 @@ export const dynamic = "force-dynamic";
 
 export default async function NewContactPage() {
   const supabase = await createSupabaseServerClient();
-  const { data: developments } = await supabase
-    .from("developments")
-    .select("id, name")
-    .eq("active", true)
-    .order("name")
-    .returns<DevelopmentOption[]>();
+  const [devsResult, agentsResult] = await Promise.all([
+    supabase
+      .from("developments")
+      .select("id, name")
+      .eq("active", true)
+      .order("name")
+      .returns<DevelopmentOption[]>(),
+    supabase
+      .from("profiles")
+      .select("id, full_name, email, role")
+      .eq("active", true)
+      .in("role", ["admin", "sales_agent"])
+      .order("full_name", { nullsFirst: false })
+      .returns<
+        { id: string; full_name: string | null; email: string | null; role: string }[]
+      >(),
+  ]);
+
+  const agents: AgentOption[] = (agentsResult.data ?? []).map((p) => ({
+    id: p.id,
+    label: p.full_name || p.email || "Unnamed",
+    role: p.role,
+  }));
 
   return (
     <main className="max-w-3xl mx-auto px-4 py-8">
@@ -28,7 +48,8 @@ export default async function NewContactPage() {
         <ContactForm
           action={createContact}
           submitLabel="Create Contact"
-          developments={developments ?? []}
+          developments={devsResult.data ?? []}
+          agents={agents}
         />
       </div>
     </main>

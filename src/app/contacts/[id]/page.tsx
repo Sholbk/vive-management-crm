@@ -1,7 +1,7 @@
 import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import AppNav from "@/components/AppNav";
-import ContactForm from "@/components/ContactForm";
+import ContactForm, { type AgentOption } from "@/components/ContactForm";
 import { updateContact } from "../actions";
 import type { ContactType } from "../types";
 
@@ -17,6 +17,7 @@ type Contact = {
   contact_source: string | null;
   contact_type: ContactType;
   notes: string | null;
+  assigned_agent_id: string | null;
   created_at: string;
 };
 
@@ -36,11 +37,11 @@ export default async function ContactDetailPage({
   const { id } = await params;
   const supabase = await createSupabaseServerClient();
 
-  const [contactResult, leadsResult] = await Promise.all([
+  const [contactResult, leadsResult, agentsResult] = await Promise.all([
     supabase
       .from("contacts")
       .select(
-        "id, first_name, last_name, email, phone, date_of_birth, contact_source, contact_type, notes, created_at",
+        "id, first_name, last_name, email, phone, date_of_birth, contact_source, contact_type, notes, assigned_agent_id, created_at",
       )
       .eq("id", id)
       .maybeSingle<Contact>(),
@@ -50,12 +51,26 @@ export default async function ContactDetailPage({
       .eq("contact_id", id)
       .order("created_at", { ascending: false })
       .returns<LinkedLead[]>(),
+    supabase
+      .from("profiles")
+      .select("id, full_name, email, role")
+      .eq("active", true)
+      .in("role", ["admin", "sales_agent"])
+      .order("full_name", { nullsFirst: false })
+      .returns<
+        { id: string; full_name: string | null; email: string | null; role: string }[]
+      >(),
   ]);
 
   const contact = contactResult.data;
   if (!contact) notFound();
 
   const leads = leadsResult.data;
+  const agents: AgentOption[] = (agentsResult.data ?? []).map((p) => ({
+    id: p.id,
+    label: p.full_name || p.email || "Unnamed",
+    role: p.role,
+  }));
 
   const name =
     [contact.first_name, contact.last_name].filter(Boolean).join(" ") ||
@@ -84,6 +99,7 @@ export default async function ContactDetailPage({
             action={boundUpdate}
             values={contact}
             submitLabel="Save Changes"
+            agents={agents}
           />
         </div>
 
