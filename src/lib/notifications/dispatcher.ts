@@ -1,6 +1,7 @@
 import "server-only";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { sendLeadEmails } from "./channels/email";
+import { postLeadToN8n } from "./channels/webhook";
 import type {
   ChannelResult,
   LeadForNotification,
@@ -17,6 +18,10 @@ export async function dispatchLeadNotifications(
 
   if (config.emails && config.emails.length > 0) {
     tasks.push(sendLeadEmails(lead, config.emails));
+  }
+
+  if (config.n8n_webhook_url) {
+    tasks.push(postLeadToN8n(lead, config.n8n_webhook_url));
   }
 
   // Each settled promise returns an array; other channels wired in later steps:

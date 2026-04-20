@@ -1,10 +1,16 @@
-export type NotificationChannel = "email" | "sms" | "slack" | "whatsapp";
+export type NotificationChannel =
+  | "email"
+  | "sms"
+  | "slack"
+  | "whatsapp"
+  | "n8n_webhook";
 
 export interface LeadNotificationConfig {
   emails?: string[];
   sms?: string[];
   whatsapp?: string[];
   slack_webhook?: string;
+  n8n_webhook_url?: string;
 }
 
 export interface LeadForNotification {
