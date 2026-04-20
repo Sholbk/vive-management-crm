@@ -91,12 +91,18 @@ export async function updateContact(contactId: string, formData: FormData) {
     assigned_agent_id: trimOrNull(formData.get("assigned_agent_id")),
   };
 
-  const { error } = await supabase
+  const { data: updated, error } = await supabase
     .from("contacts")
     .update(row)
-    .eq("id", contactId);
+    .eq("id", contactId)
+    .select("id");
 
   if (error) throw new Error(error.message);
+  if (!updated || updated.length === 0) {
+    throw new Error(
+      "Contact was not updated. Your account may not have permission to edit this contact.",
+    );
+  }
 
   revalidatePath("/contacts");
   revalidatePath(`/contacts/${contactId}`);
