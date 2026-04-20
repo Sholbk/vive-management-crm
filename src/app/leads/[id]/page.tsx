@@ -175,6 +175,21 @@ export default async function LeadDetailPage({
       >(),
   ]);
 
+  if (leadResult.error) {
+    return (
+      <main className="max-w-5xl mx-auto px-4 py-8">
+        <AppNav current="leads" />
+        <div className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <p className="font-semibold mb-1">Failed to load lead</p>
+          <p className="font-mono text-xs">{leadResult.error.message}</p>
+          <p className="mt-2">
+            Lead id: <code className="font-mono">{id}</code>
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   const lead = leadResult.data;
   if (!lead) notFound();
 

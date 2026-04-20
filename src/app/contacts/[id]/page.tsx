@@ -65,6 +65,21 @@ export default async function ContactDetailPage({
       >(),
   ]);
 
+  if (contactResult.error) {
+    return (
+      <main className="max-w-4xl mx-auto px-4 py-8">
+        <AppNav current="contacts" />
+        <div className="rounded border border-red-200 bg-red-50 p-4 text-sm text-red-800">
+          <p className="font-semibold mb-1">Failed to load contact</p>
+          <p className="font-mono text-xs">{contactResult.error.message}</p>
+          <p className="mt-2">
+            Contact id: <code className="font-mono">{id}</code>
+          </p>
+        </div>
+      </main>
+    );
+  }
+
   const contact = contactResult.data;
   if (!contact) notFound();
 
