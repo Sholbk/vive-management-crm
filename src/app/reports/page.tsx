@@ -1,5 +1,6 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import AppNav from "@/components/AppNav";
+import ReportsFilters from "@/components/reports/ReportsFilters";
 import FunnelPanel from "@/components/reports/FunnelPanel";
 import PipelineValuePanel from "@/components/reports/PipelineValuePanel";
 import SourcePanel from "@/components/reports/SourcePanel";
@@ -10,13 +11,6 @@ import { getStageLabels } from "@/lib/stage-labels";
 
 export const dynamic = "force-dynamic";
 
-const RANGE_OPTIONS: { value: Range; label: string }[] = [
-  { value: "7d", label: "7 days" },
-  { value: "30d", label: "30 days" },
-  { value: "90d", label: "90 days" },
-  { value: "all", label: "All time" },
-];
-
 function isRange(value: string | undefined): value is Range {
   return ["7d", "30d", "90d", "all"].includes(value ?? "");
 }
@@ -24,42 +18,66 @@ function isRange(value: string | undefined): value is Range {
 export default async function ReportsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ range?: string }>;
+  searchParams: Promise<{
+    range?: string;
+    owner?: string;
+    development?: string;
+  }>;
 }) {
   const params = await searchParams;
   const range: Range = isRange(params.range) ? params.range : "all";
+  const ownerId = params.owner || null;
+  const developmentId = params.development || null;
 
   const supabase = await createSupabaseServerClient();
-  const [data, stageLabels] = await Promise.all([
-    getReportData(supabase, range).catch((err) => {
+  const [data, stageLabels, agentsResult, devsResult] = await Promise.all([
+    getReportData(supabase, range, { ownerId, developmentId }).catch((err) => {
       console.error("Reports load failed", err);
       return null;
     }),
     getStageLabels(supabase),
+    supabase
+      .from("profiles")
+      .select("id, full_name, email, role")
+      .eq("active", true)
+      .in("role", ["admin", "sales_agent"])
+      .order("full_name", { nullsFirst: false })
+      .returns<
+        {
+          id: string;
+          full_name: string | null;
+          email: string | null;
+          role: string;
+        }[]
+      >(),
+    supabase
+      .from("developments")
+      .select("id, name")
+      .eq("active", true)
+      .order("name")
+      .returns<{ id: string; name: string }[]>(),
   ]);
+
+  const agents = (agentsResult.data ?? []).map((p) => ({
+    id: p.id,
+    label: p.full_name || p.email || "Unnamed",
+  }));
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
       <AppNav current="reports" />
 
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h2 className="text-2xl font-semibold">Reports</h2>
-        <div className="flex items-center gap-1 text-sm">
-          {RANGE_OPTIONS.map((opt) => (
-            <a
-              key={opt.value}
-              href={`/reports?range=${opt.value}`}
-              className={`px-3 py-1 rounded-md ${
-                range === opt.value
-                  ? "bg-brand-accent text-white"
-                  : "text-text-muted hover:text-text"
-              }`}
-            >
-              {opt.label}
-            </a>
-          ))}
-        </div>
       </div>
+
+      <ReportsFilters
+        range={range}
+        ownerId={ownerId}
+        developmentId={developmentId}
+        agents={agents}
+        developments={devsResult.data ?? []}
+      />
 
       {data === null ? (
         <div className="rounded border border-red-200 bg-red-50 p-3 text-sm text-red-800">

@@ -59,9 +59,15 @@ export interface ReportData {
   weekly: WeekBucket[];
 }
 
+export interface ReportFilters {
+  ownerId?: string | null;
+  developmentId?: string | null;
+}
+
 export async function getReportData(
   supabase: SupabaseClient,
   range: Range,
+  filters: ReportFilters = {},
 ): Promise<ReportData> {
   const dateFrom = rangeToDate(range);
 
@@ -74,6 +80,9 @@ export async function getReportData(
     .limit(10000);
 
   if (dateFrom) query = query.gte("created_at", dateFrom);
+  if (filters.ownerId) query = query.eq("assigned_agent_id", filters.ownerId);
+  if (filters.developmentId)
+    query = query.eq("development_id", filters.developmentId);
 
   const { data: leads, error } = await query.returns<RawLead[]>();
   if (error) throw error;
