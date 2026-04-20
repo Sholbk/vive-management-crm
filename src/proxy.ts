@@ -1,53 +1,39 @@
 import { NextResponse, type NextRequest } from "next/server";
-import { createServerClient, type CookieOptions } from "@supabase/ssr";
 
-type CookieToSet = { name: string; value: string; options: CookieOptions };
+// Fast cookie-presence check. Previously this proxy called
+// supabase.auth.getUser() which is a network round-trip to Supabase
+// (~150ms). That cost ran on every matched request, including the POST
+// + redirect pair that every form submission generates, adding ~300ms
+// of latency on every "Save" button click.
+//
+// Pages themselves call createSupabaseServerClient() + getUser(), which
+// performs the real JWT validation and refresh. The proxy just fast-
+// paths the "do you have any session cookie at all" decision.
+function hasSupabaseSession(request: NextRequest): boolean {
+  return request.cookies
+    .getAll()
+    .some((c) => c.name.startsWith("sb-") && c.name.includes("auth-token"));
+}
 
-export async function proxy(request: NextRequest) {
-  let response = NextResponse.next({ request });
-
-  const supabase = createServerClient(
-    process.env.NEXT_PUBLIC_SUPABASE_URL!,
-    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-    {
-      cookies: {
-        getAll() {
-          return request.cookies.getAll();
-        },
-        setAll(cookiesToSet: CookieToSet[]) {
-          for (const { name, value } of cookiesToSet) {
-            request.cookies.set(name, value);
-          }
-          response = NextResponse.next({ request });
-          for (const { name, value, options } of cookiesToSet) {
-            response.cookies.set(name, value, options);
-          }
-        },
-      },
-    },
-  );
-
-  const {
-    data: { user },
-  } = await supabase.auth.getUser();
-
+export function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
+  const hasSession = hasSupabaseSession(request);
 
-  if (!user && pathname !== "/login") {
+  if (!hasSession && pathname !== "/login") {
     const loginUrl = new URL("/login", request.url);
     loginUrl.searchParams.set("next", pathname);
     return NextResponse.redirect(loginUrl);
   }
 
-  if (user && pathname === "/login") {
+  if (hasSession && pathname === "/login") {
     return NextResponse.redirect(new URL("/leads", request.url));
   }
 
-  return response;
+  return NextResponse.next();
 }
 
 export const config = {
-  // API routes and /auth/* manage their own sessions; running the proxy's
-  // getUser() call on them just adds a Supabase round-trip per request.
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api|auth).*)"],
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|api|auth).*)",
+  ],
 };
