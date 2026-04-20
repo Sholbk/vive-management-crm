@@ -55,10 +55,13 @@ function inputCls() {
 
 export default async function LeadDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>;
+  searchParams: Promise<{ saved?: string }>;
 }) {
   const { id } = await params;
+  const { saved } = await searchParams;
   const supabase = await createSupabaseServerClient();
 
   const [leadResult, agentsResult, stageLabels, devsResult] = await Promise.all([
@@ -131,6 +134,12 @@ export default async function LeadDetailPage({
         {lead.developments?.name ?? "—"} &bull; Added{" "}
         {new Date(lead.created_at).toLocaleDateString()}
       </p>
+
+      {saved === "1" && (
+        <div className="mb-6 rounded border border-green-200 bg-green-50 p-3 text-sm text-green-800">
+          Saved ✓
+        </div>
+      )}
 
       <div className="grid lg:grid-cols-[1fr_300px] gap-6">
         <div className="bg-white border border-border rounded-lg p-6">
