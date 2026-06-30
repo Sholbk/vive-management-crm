@@ -7,6 +7,8 @@ export type NotificationChannel =
 
 export interface LeadNotificationConfig {
   emails?: string[];
+  /** Send an instant acknowledgment email to the lead. Defaults to true. */
+  auto_reply?: boolean;
   sms?: string[];
   whatsapp?: string[];
   slack_webhook?: string;

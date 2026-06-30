@@ -1,6 +1,7 @@
 import "server-only";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { sendLeadEmails } from "./channels/email";
+import { sendLeadAcknowledgment } from "./channels/autoresponder";
 import { postLeadToN8n } from "./channels/webhook";
 import type {
   ChannelResult,
@@ -18,6 +19,12 @@ export async function dispatchLeadNotifications(
 
   if (config.emails && config.emails.length > 0) {
     tasks.push(sendLeadEmails(lead, config.emails));
+  }
+
+  // Instant acknowledgment to the lead. On by default; set auto_reply: false
+  // on a development to suppress it (e.g. when N8N owns the first touch).
+  if (config.auto_reply !== false && lead.email) {
+    tasks.push(sendLeadAcknowledgment(lead, config.emails?.[0]));
   }
 
   if (config.n8n_webhook_url) {

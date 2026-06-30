@@ -1,16 +1,6 @@
 import "server-only";
-import sgMail from "@sendgrid/mail";
+import { getResend, getFromAddress } from "../resend-client";
 import type { ChannelResult, LeadForNotification } from "../types";
-
-let configured = false;
-
-function configureSendgrid(): void {
-  if (configured) return;
-  const key = process.env.SENDGRID_API_KEY;
-  if (!key) throw new Error("Missing SENDGRID_API_KEY");
-  sgMail.setApiKey(key);
-  configured = true;
-}
 
 function formatSubject(lead: LeadForNotification): string {
   const name = [lead.first_name, lead.last_name].filter(Boolean).join(" ").trim() || "Unknown";
@@ -83,19 +73,13 @@ export async function sendLeadEmails(
 ): Promise<ChannelResult[]> {
   if (recipients.length === 0) return [];
 
-  const from = process.env.SENDGRID_FROM_EMAIL;
   const crmUrl = process.env.NEXT_PUBLIC_CRM_URL ?? "";
-  if (!from) {
-    return recipients.map((r) => ({
-      channel: "email" as const,
-      recipient: r,
-      status: "failed" as const,
-      error: "Missing SENDGRID_FROM_EMAIL",
-    }));
-  }
 
+  let resend: ReturnType<typeof getResend>;
+  let from: string;
   try {
-    configureSendgrid();
+    resend = getResend();
+    from = getFromAddress();
   } catch (err) {
     const error = err instanceof Error ? err.message : String(err);
     return recipients.map((r) => ({
@@ -109,22 +93,33 @@ export async function sendLeadEmails(
   const subject = formatSubject(lead);
   const html = formatHtml(lead, crmUrl);
   const text = formatText(lead, crmUrl);
+  // Replying to the team alert reaches the lead directly.
+  const replyTo = lead.email ?? undefined;
 
   const results = await Promise.all(
     recipients.map(async (to): Promise<ChannelResult> => {
       try {
-        const [response] = await sgMail.send({
+        const { data, error } = await resend.emails.send({
           from,
           to,
           subject,
           html,
           text,
+          ...(replyTo ? { replyTo } : {}),
         });
+        if (error) {
+          return {
+            channel: "email",
+            recipient: to,
+            status: "failed",
+            error: error.message,
+          };
+        }
         return {
           channel: "email",
           recipient: to,
           status: "sent",
-          provider_message_id: response.headers["x-message-id"] as string | undefined,
+          provider_message_id: data?.id,
         };
       } catch (err) {
         return {
