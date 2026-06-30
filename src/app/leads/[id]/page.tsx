@@ -14,6 +14,9 @@ import Activities, {
   type ProfileOption,
   type ContactOption,
 } from "@/components/leads/Activities";
+import DocumentsSection, {
+  type LeadAttachment,
+} from "@/components/leads/Documents";
 
 export const dynamic = "force-dynamic";
 
@@ -209,6 +212,41 @@ export default async function LeadDetailPage({
 
   const lead = leadResult.data;
   if (!lead) notFound();
+
+  // Documents: load metadata rows, then mint short-lived signed URLs for the
+  // private lead-documents bucket so the team can open them inline.
+  const { data: attachmentRows } = await supabase
+    .from("lead_attachments")
+    .select("id, bucket, path, file_name, mime_type, size_bytes, created_at")
+    .eq("lead_id", id)
+    .order("created_at", { ascending: false })
+    .returns<
+      {
+        id: string;
+        bucket: string;
+        path: string;
+        file_name: string;
+        mime_type: string | null;
+        size_bytes: number | null;
+        created_at: string;
+      }[]
+    >();
+
+  const attachments: LeadAttachment[] = await Promise.all(
+    (attachmentRows ?? []).map(async (row) => {
+      const { data: signed } = await supabase.storage
+        .from(row.bucket)
+        .createSignedUrl(row.path, 60 * 60);
+      return {
+        id: row.id,
+        file_name: row.file_name,
+        mime_type: row.mime_type,
+        size_bytes: row.size_bytes,
+        created_at: row.created_at,
+        signed_url: signed?.signedUrl ?? null,
+      };
+    }),
+  );
 
   const agents = (agentsResult.data ?? []).map((p) => ({
     id: p.id,
@@ -513,6 +551,10 @@ export default async function LeadDetailPage({
           allContacts={allContacts}
           primaryContactId={lead.contact_id}
         />
+      </div>
+
+      <div className="mt-6">
+        <DocumentsSection leadId={lead.id} attachments={attachments} />
       </div>
     </main>
   );

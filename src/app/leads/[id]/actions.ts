@@ -242,3 +242,89 @@ export async function removeAdditionalContact(
   if (error) throw new Error(error.message);
   revalidatePath(`/leads/${leadId}`);
 }
+
+// =============================================================================
+// Documents (Supabase Storage: lead-documents bucket + lead_attachments table)
+// =============================================================================
+
+const LEAD_DOCS_BUCKET = "lead-documents";
+
+function sanitizeFileName(name: string): string {
+  return name.replace(/[^a-zA-Z0-9._-]/g, "_").slice(0, 120) || "file";
+}
+
+export async function uploadLeadAttachment(leadId: string, formData: FormData) {
+  const file = formData.get("file");
+  if (!(file instanceof File) || file.size === 0) {
+    throw new Error("No file selected");
+  }
+
+  const supabase = await createSupabaseServerClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+  if (!user) throw new Error("Not authenticated");
+
+  // Look up the lead's primary contact so the attachment can be associated.
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("contact_id")
+    .eq("id", leadId)
+    .maybeSingle();
+
+  const path = `${leadId}/${crypto.randomUUID()}-${sanitizeFileName(file.name)}`;
+
+  const { error: uploadErr } = await supabase.storage
+    .from(LEAD_DOCS_BUCKET)
+    .upload(path, file, {
+      contentType: file.type || "application/octet-stream",
+      upsert: false,
+    });
+  if (uploadErr) throw new Error(uploadErr.message);
+
+  const { error: rowErr } = await supabase.from("lead_attachments").insert({
+    lead_id: leadId,
+    contact_id: lead?.contact_id ?? null,
+    bucket: LEAD_DOCS_BUCKET,
+    path,
+    file_name: file.name,
+    mime_type: file.type || null,
+    size_bytes: file.size,
+    uploaded_by: user.id,
+  });
+  if (rowErr) {
+    // Roll back the orphaned object so storage and the table stay in sync.
+    await supabase.storage.from(LEAD_DOCS_BUCKET).remove([path]);
+    throw new Error(rowErr.message);
+  }
+
+  revalidatePath(`/leads/${leadId}`);
+}
+
+export async function deleteLeadAttachment(
+  leadId: string,
+  attachmentId: string,
+) {
+  const supabase = await createSupabaseServerClient();
+
+  const { data: row, error: fetchErr } = await supabase
+    .from("lead_attachments")
+    .select("bucket, path")
+    .eq("id", attachmentId)
+    .maybeSingle();
+  if (fetchErr) throw new Error(fetchErr.message);
+  if (!row) return;
+
+  const { error: storageErr } = await supabase.storage
+    .from(row.bucket)
+    .remove([row.path]);
+  if (storageErr) throw new Error(storageErr.message);
+
+  const { error: rowErr } = await supabase
+    .from("lead_attachments")
+    .delete()
+    .eq("id", attachmentId);
+  if (rowErr) throw new Error(rowErr.message);
+
+  revalidatePath(`/leads/${leadId}`);
+}
