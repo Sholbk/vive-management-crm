@@ -63,5 +63,11 @@ export async function proxy(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|api|auth).*)"],
+  // Exclude Next internals, API/auth routes, and any static asset in /public
+  // (files with an extension). Without the extension exclusion, requests for
+  // public assets like /vive-management-logo.png get auth-gated and redirected
+  // to /login, so the logo fails to load on unauthenticated pages.
+  matcher: [
+    "/((?!_next/static|_next/image|favicon.ico|api|auth|.*\\.(?:png|jpe?g|gif|svg|webp|ico|css|js|txt|xml|woff2?|ttf|otf|map)$).*)",
+  ],
 };
