@@ -112,7 +112,7 @@ export default function HomePage() {
               <span className="w-2.5 h-2.5 rounded-full bg-yellow-400" />
               <span className="w-2.5 h-2.5 rounded-full bg-green-400" />
               <span className="ml-3 text-xs text-text-muted">
-                vive-management-crm.netlify.app/leads
+                management.viverealestate.mx/leads
               </span>
             </div>
             <div className="p-5">
