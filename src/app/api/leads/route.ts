@@ -2,6 +2,8 @@ import { NextResponse, type NextRequest } from "next/server";
 import { createSupabaseServiceClient } from "@/lib/supabase/service";
 import { leadPayloadSchema } from "@/lib/leads/schema";
 import { corsHeaders, resolveCorsOrigin } from "@/lib/leads/cors";
+import { consumeRateLimit } from "@/lib/leads/rate-limit";
+import { verifyTurnstileToken } from "@/lib/leads/turnstile";
 import { dispatchLeadNotifications } from "@/lib/notifications/dispatcher";
 import type {
   LeadForNotification,
@@ -10,6 +12,9 @@ import type {
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
+
+const IP_RATE_LIMIT = { limit: 8, windowSeconds: 600 };
+const GLOBAL_RATE_LIMIT = { limit: 100, windowSeconds: 3600 };
 
 export async function OPTIONS(req: NextRequest) {
   const origin = resolveCorsOrigin(req.headers.get("origin"));
@@ -29,7 +34,40 @@ export async function POST(req: NextRequest) {
   }
   const headers = corsHeaders(origin);
 
-  // 1. Parse + validate
+  const ip =
+    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    req.headers.get("x-real-ip") ||
+    null;
+
+  const supabase = createSupabaseServiceClient();
+
+  // 1a. Rate limit before doing any other work. Per-IP first, then a global
+  // cap as a backstop against distributed floods (and for when no client IP
+  // header survives the proxy chain).
+  const [ipAllowed, globalAllowed] = await Promise.all([
+    ip
+      ? consumeRateLimit(
+          supabase,
+          `leads:ip:${ip}`,
+          IP_RATE_LIMIT.limit,
+          IP_RATE_LIMIT.windowSeconds,
+        )
+      : Promise.resolve(true),
+    consumeRateLimit(
+      supabase,
+      "leads:global",
+      GLOBAL_RATE_LIMIT.limit,
+      GLOBAL_RATE_LIMIT.windowSeconds,
+    ),
+  ]);
+  if (!ipAllowed || !globalAllowed) {
+    return NextResponse.json(
+      { error: "rate_limited" },
+      { status: 429, headers: { ...headers, "Retry-After": "600" } },
+    );
+  }
+
+  // 1b. Parse + validate
   let parsed;
   try {
     const body = await req.json();
@@ -45,9 +83,18 @@ export async function POST(req: NextRequest) {
   }
   const payload = parsed.data;
 
-  // Turnstile verification will be added in a later step.
-
-  const supabase = createSupabaseServiceClient();
+  // 1c. Turnstile — enforced only once TURNSTILE_SECRET_KEY is configured.
+  const turnstile = await verifyTurnstileToken(payload.turnstileToken, ip);
+  if (turnstile.outcome === "fail") {
+    console.warn("Turnstile rejected lead submission", {
+      ip,
+      errorCodes: turnstile.errorCodes,
+    });
+    return NextResponse.json(
+      { error: "turnstile_failed" },
+      { status: 403, headers },
+    );
+  }
 
   // 2. Resolve development_id from slug
   const { data: dev, error: devErr } = await supabase
@@ -138,10 +185,6 @@ export async function POST(req: NextRequest) {
   }
 
   // 5. Insert lead
-  const ip =
-    req.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    req.headers.get("x-real-ip") ||
-    null;
   const userAgent = req.headers.get("user-agent");
 
   const insertRow = {
