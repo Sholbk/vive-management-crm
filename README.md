@@ -18,6 +18,9 @@ Central CRM receiving leads from 3 housing-development marketing sites. Phase 1:
    - `NEXT_PUBLIC_CRM_URL` (e.g. `http://localhost:3000` locally)
    - `LEAD_INTAKE_ALLOWED_ORIGINS` (comma-separated origins of marketing sites)
    - `RESEND_API_KEY`, `RESEND_FROM_EMAIL`
+   - `TURNSTILE_SECRET_KEY` (optional — leave unset to skip Turnstile
+     verification on `/api/leads`; set it once the marketing sites render the
+     widget and send real tokens)
 4. Per-development notification recipients live in `developments.lead_notification_channels` (JSON), e.g.:
 
    ```json
@@ -36,6 +39,18 @@ Central CRM receiving leads from 3 housing-development marketing sites. Phase 1:
 `POST /api/leads` — called by marketing sites. CORS-locked to `LEAD_INTAKE_ALLOWED_ORIGINS`.
 
 Payload shape is the Zod schema in `src/lib/leads/schema.ts`.
+
+Abuse protection:
+
+- **Rate limiting** (always on): 8 requests / 10 min per IP + 100 requests /
+  hour globally, counted in the `api_rate_limits` table
+  (`consume_rate_limit()` Postgres function, migration `0011`). Returns
+  `429 rate_limited`. Fails open if the counter itself errors.
+- **Cloudflare Turnstile** (on when `TURNSTILE_SECRET_KEY` is set): the
+  payload's `turnstileToken` is verified against Cloudflare siteverify;
+  failures return `403 turnstile_failed`. The marketing site renders the
+  widget when `NEXT_PUBLIC_TURNSTILE_SITE_KEY` is set (same Cloudflare
+  widget, two keys).
 
 ## Security boundaries
 
