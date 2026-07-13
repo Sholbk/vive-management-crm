@@ -1,7 +1,7 @@
 "use server";
 
 import { redirect } from "next/navigation";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import { createSupabaseEmailLinkClient } from "@/lib/supabase/server";
 import { resolveOrigin } from "@/lib/auth/origin";
 
 export async function requestPasswordReset(formData: FormData) {
@@ -10,7 +10,9 @@ export async function requestPasswordReset(formData: FormData) {
     redirect(`/login/forgot?error=${encodeURIComponent("Email required")}`);
   }
 
-  const supabase = await createSupabaseServerClient();
+  // Implicit flow, same reason as the magic link: a reset link opened on a
+  // different device than it was requested from must still work.
+  const supabase = await createSupabaseEmailLinkClient();
   const origin = await resolveOrigin();
   const { error } = await supabase.auth.resetPasswordForEmail(email, {
     redirectTo: `${origin}/auth/callback?next=${encodeURIComponent("/reset-password")}`,

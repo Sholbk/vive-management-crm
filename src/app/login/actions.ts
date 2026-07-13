@@ -2,7 +2,10 @@
 
 import { redirect } from "next/navigation";
 import type { AuthError } from "@supabase/supabase-js";
-import { createSupabaseServerClient } from "@/lib/supabase/server";
+import {
+  createSupabaseEmailLinkClient,
+  createSupabaseServerClient,
+} from "@/lib/supabase/server";
 import { resolveOrigin } from "@/lib/auth/origin";
 
 const DEFAULT_NEXT = "/leads";
@@ -29,7 +32,9 @@ export async function sendMagicLink(formData: FormData) {
     redirect(`/login?error=${encodeURIComponent("Email is required")}`);
   }
 
-  const supabase = await createSupabaseServerClient();
+  // Implicit flow: the link must be redeemable in whatever browser opens the
+  // email, not just the one that requested it.
+  const supabase = await createSupabaseEmailLinkClient();
   const origin = await resolveOrigin();
 
   const { error } = await supabase.auth.signInWithOtp({
