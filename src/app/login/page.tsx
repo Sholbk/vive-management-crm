@@ -2,11 +2,18 @@ import Link from "next/link";
 import Logo from "@/components/Logo";
 import LoginForm from "./LoginForm";
 
-export default function LoginPage({
+export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; sent?: string; error?: string }>;
+  searchParams: Promise<{
+    next?: string;
+    sent?: string;
+    error?: string;
+    mode?: string;
+  }>;
 }) {
+  const { next, sent, error, mode } = await searchParams;
+
   return (
     <main className="min-h-screen bg-surface flex flex-col">
       <header className="max-w-5xl w-full mx-auto px-6 py-4">
@@ -28,7 +35,12 @@ export default function LoginPage({
               Manage leads from every Vive Real Estate development in one
               place.
             </p>
-            <LoginForm searchParamsPromise={searchParams} />
+            <LoginForm
+              next={next}
+              sent={sent}
+              error={error}
+              initialMode={mode === "password" ? "password" : "magic"}
+            />
           </div>
           <p className="text-xs text-text-muted text-center mt-6">
             By signing in you agree to our{" "}
