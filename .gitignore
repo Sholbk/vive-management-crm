@@ -13,3 +13,6 @@ yarn-error.log*
 .vercel
 next-env.d.ts
 tsconfig.tsbuildinfo
+
+# Local Netlify folder
+.netlify
