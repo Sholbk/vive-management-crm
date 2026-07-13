@@ -1,6 +1,7 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import AppNav from "@/components/AppNav";
 import ReportsFilters from "@/components/reports/ReportsFilters";
+import ExportButtons from "@/components/reports/ExportButtons";
 import FunnelPanel from "@/components/reports/FunnelPanel";
 import PipelineValuePanel from "@/components/reports/PipelineValuePanel";
 import SourcePanel from "@/components/reports/SourcePanel";
@@ -69,6 +70,11 @@ export default async function ReportsPage({
 
       <div className="flex flex-wrap items-center justify-between gap-3 mb-6">
         <h2 className="text-2xl font-semibold">Reports</h2>
+        <ExportButtons
+          range={range}
+          ownerId={ownerId}
+          developmentId={developmentId}
+        />
       </div>
 
       <ReportsFilters
