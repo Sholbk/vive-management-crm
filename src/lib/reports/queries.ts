@@ -214,6 +214,102 @@ function buildWeekly(rows: RawLead[]): WeekBucket[] {
   return buckets;
 }
 
+export interface ExportLead {
+  created_at: string;
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  development: string;
+  stage: Stage;
+  status: string;
+  source: string;
+  utm_source: string | null;
+  utm_medium: string | null;
+  utm_campaign: string | null;
+  budget_min_cents: number | null;
+  budget_max_cents: number | null;
+  timeline: string | null;
+  financing: string | null;
+  assigned_agent: string;
+}
+
+type RawExportLead = Omit<ExportLead, "development" | "assigned_agent"> & {
+  assigned_agent_id: string | null;
+  developments: { name: string } | null;
+};
+
+/**
+ * Lead-level rows behind the report aggregates, for the export's Leads sheet.
+ *
+ * Runs through the caller's RLS-bound client on purpose: an agent exports only
+ * the leads they can already see in the UI. Never swap this for the
+ * service-role client — that would leak every development's contacts to anyone
+ * who can reach the export URL.
+ */
+export async function getReportLeads(
+  supabase: SupabaseClient,
+  range: Range,
+  filters: ReportFilters = {},
+): Promise<ExportLead[]> {
+  const dateFrom = rangeToDate(range);
+
+  let query = supabase
+    .from("leads")
+    .select(
+      "created_at, first_name, last_name, email, phone, stage, status, source, utm_source, utm_medium, utm_campaign, budget_min_cents, budget_max_cents, timeline, financing, assigned_agent_id, developments ( name )",
+    )
+    .order("created_at", { ascending: false })
+    .limit(10000);
+
+  if (dateFrom) query = query.gte("created_at", dateFrom);
+  if (filters.ownerId) query = query.eq("assigned_agent_id", filters.ownerId);
+  if (filters.developmentId)
+    query = query.eq("development_id", filters.developmentId);
+
+  const { data, error } = await query.returns<RawExportLead[]>();
+  if (error) throw error;
+  const rows = data ?? [];
+
+  const agentIds = [
+    ...new Set(rows.map((r) => r.assigned_agent_id).filter(Boolean)),
+  ] as string[];
+
+  const agentNames = new Map<string, string>();
+  if (agentIds.length > 0) {
+    const { data: profiles } = await supabase
+      .from("profiles")
+      .select("id, full_name, email")
+      .in("id", agentIds)
+      .returns<{ id: string; full_name: string | null; email: string | null }[]>();
+    for (const p of profiles ?? []) {
+      agentNames.set(p.id, p.full_name || p.email || "—");
+    }
+  }
+
+  return rows.map((r) => ({
+    created_at: r.created_at,
+    first_name: r.first_name,
+    last_name: r.last_name,
+    email: r.email,
+    phone: r.phone,
+    development: r.developments?.name ?? "—",
+    stage: r.stage,
+    status: r.status,
+    source: r.source,
+    utm_source: r.utm_source,
+    utm_medium: r.utm_medium,
+    utm_campaign: r.utm_campaign,
+    budget_min_cents: r.budget_min_cents,
+    budget_max_cents: r.budget_max_cents,
+    timeline: r.timeline,
+    financing: r.financing,
+    assigned_agent: r.assigned_agent_id
+      ? (agentNames.get(r.assigned_agent_id) ?? "—")
+      : "Unassigned",
+  }));
+}
+
 export function formatCents(cents: number): string {
   return new Intl.NumberFormat("en-US", {
     style: "currency",
