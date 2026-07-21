@@ -116,6 +116,105 @@ export async function updateContact(contactId: string, formData: FormData) {
   redirect(`/contacts/${contactId}?saved=1`);
 }
 
+export type ContactActionResult = { ok: true } | { ok: false; error: string };
+
+export async function addContactToPipeline(
+  contactId: string,
+  developmentId: string,
+): Promise<ContactActionResult> {
+  if (!contactId || !developmentId)
+    return { ok: false, error: "Pick a development." };
+
+  const supabase = await createSupabaseServerClient();
+
+  const { data: contact, error: contactErr } = await supabase
+    .from("contacts")
+    .select("id, first_name, last_name, email, phone")
+    .eq("id", contactId)
+    .maybeSingle();
+  if (contactErr) return { ok: false, error: contactErr.message };
+  if (!contact) return { ok: false, error: "Contact not found." };
+
+  const { data: existing, error: existingErr } = await supabase
+    .from("leads")
+    .select("id")
+    .eq("contact_id", contactId)
+    .eq("development_id", developmentId)
+    .eq("status", "open")
+    .limit(1);
+  if (existingErr) return { ok: false, error: existingErr.message };
+  if (existing && existing.length > 0)
+    return {
+      ok: false,
+      error:
+        "This contact already has an open pipeline entry in that development.",
+    };
+
+  const { error } = await supabase.from("leads").insert({
+    development_id: developmentId,
+    contact_id: contact.id,
+    first_name: contact.first_name,
+    last_name: contact.last_name,
+    email: contact.email,
+    phone: contact.phone,
+    stage: "new",
+    source: "other",
+    status: "open",
+  });
+  if (error) return { ok: false, error: error.message };
+
+  revalidatePath("/leads");
+  revalidatePath("/contacts");
+  revalidatePath(`/contacts/${contactId}`);
+  return { ok: true };
+}
+
+export async function markContactAsClient(
+  contactId: string,
+): Promise<ContactActionResult> {
+  const supabase = await createSupabaseServerClient();
+  const { data: updated, error } = await supabase
+    .from("contacts")
+    .update({ contact_type: "client" })
+    .eq("id", contactId)
+    .select("id");
+  if (error) return { ok: false, error: error.message };
+  // RLS silent-zero guard, same as updateContact.
+  if (!updated || updated.length === 0)
+    return {
+      ok: false,
+      error:
+        "The contact was not updated. Your account may not have permission.",
+    };
+  revalidatePath("/contacts");
+  revalidatePath(`/contacts/${contactId}`);
+  return { ok: true };
+}
+
+// Form-action wrappers for the server-rendered contact detail page: report
+// outcomes via the page's existing ?saved= / ?error= banners.
+export async function addContactToPipelineForm(
+  contactId: string,
+  formData: FormData,
+) {
+  const developmentId = trimOrNull(formData.get("development_id"));
+  const result = developmentId
+    ? await addContactToPipeline(contactId, developmentId)
+    : { ok: false as const, error: "Pick a development." };
+  redirect(
+    `/contacts/${contactId}?` +
+      (result.ok ? "saved=1" : `error=${encodeURIComponent(result.error)}`),
+  );
+}
+
+export async function markContactAsClientForm(contactId: string) {
+  const result = await markContactAsClient(contactId);
+  redirect(
+    `/contacts/${contactId}?` +
+      (result.ok ? "saved=1" : `error=${encodeURIComponent(result.error)}`),
+  );
+}
+
 export type DeleteContactsResult =
   | { ok: true; deleted: number }
   | { ok: false; error: string };
