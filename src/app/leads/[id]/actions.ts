@@ -229,6 +229,43 @@ export async function addAdditionalContact(leadId: string, formData: FormData) {
   revalidatePath(`/leads/${leadId}`);
 }
 
+export async function createAndLinkAdditionalContact(
+  leadId: string,
+  formData: FormData,
+) {
+  const firstName = trim(formData.get("first_name"));
+  const lastName = trim(formData.get("last_name"));
+  if (!firstName && !lastName) throw new Error("Name required");
+  const relationship = trim(formData.get("relationship"));
+
+  const supabase = await createSupabaseServerClient();
+  // contact_type "other" so no pipeline entry is created for this person.
+  const { data: contact, error } = await supabase
+    .from("contacts")
+    .insert({
+      first_name: firstName,
+      last_name: lastName,
+      email: trim(formData.get("email")),
+      phone: trim(formData.get("phone")),
+      contact_type: "other",
+    })
+    .select("id")
+    .single();
+  if (error) {
+    throw new Error(
+      error.message.includes("duplicate")
+        ? "A contact with that email already exists — select them from the list above instead."
+        : error.message,
+    );
+  }
+
+  const { error: linkErr } = await supabase
+    .from("lead_additional_contacts")
+    .insert({ lead_id: leadId, contact_id: contact.id, relationship });
+  if (linkErr) throw new Error(linkErr.message);
+  revalidatePath(`/leads/${leadId}`);
+}
+
 export async function removeAdditionalContact(
   leadId: string,
   contactId: string,

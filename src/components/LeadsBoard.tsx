@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   DndContext,
@@ -252,6 +253,12 @@ export default function LeadsBoard({
             </option>
           ))}
         </select>
+        <Link
+          href="/contacts/new"
+          className="ml-auto px-3 py-1.5 bg-brand-accent text-white text-sm font-semibold rounded-md hover:opacity-90"
+        >
+          + Add Contact
+        </Link>
       </div>
 
       <DndContext sensors={sensors} onDragEnd={handleDragEnd}>
