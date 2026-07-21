@@ -11,6 +11,7 @@ import {
   deletePayment,
   toggleFollower,
   addAdditionalContact,
+  createAndLinkAdditionalContact,
   removeAdditionalContact,
 } from "@/app/leads/[id]/actions";
 import NoteItem from "./NoteItem";
@@ -672,6 +673,46 @@ function AdditionalContactsSection({
           Add
         </button>
       </form>
+
+      <details className="mb-4">
+        <summary className="text-sm text-brand-accent cursor-pointer select-none hover:underline">
+          + New contact
+        </summary>
+        <form
+          action={createAndLinkAdditionalContact.bind(null, leadId)}
+          className="mt-3 grid sm:grid-cols-2 gap-2"
+        >
+          <input
+            name="first_name"
+            placeholder="First name"
+            className={inputCls}
+          />
+          <input name="last_name" placeholder="Last name" className={inputCls} />
+          <input
+            name="email"
+            type="email"
+            placeholder="Email (optional)"
+            className={inputCls}
+          />
+          <input
+            name="phone"
+            type="tel"
+            placeholder="Phone (optional)"
+            className={inputCls}
+          />
+          <select name="relationship" defaultValue="" className={inputCls}>
+            <option value="">Relationship</option>
+            {RELATIONSHIPS.map((r) => (
+              <option key={r} value={r}>
+                {r.charAt(0).toUpperCase() + r.slice(1)}
+              </option>
+            ))}
+          </select>
+          <button type="submit" className={btnPrimary}>
+            Create &amp; add
+          </button>
+        </form>
+      </details>
 
       {linked.length === 0 ? (
         <p className="text-sm text-text-muted">No additional contacts.</p>
