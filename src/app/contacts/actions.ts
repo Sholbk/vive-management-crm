@@ -215,6 +215,121 @@ export async function markContactAsClientForm(contactId: string) {
   );
 }
 
+export type ImportedContactRow = {
+  first_name: string | null;
+  last_name: string | null;
+  email: string | null;
+  phone: string | null;
+  contact_source: string | null;
+  contact_type: string | null;
+  notes: string | null;
+  date_of_birth: string | null;
+};
+
+export type ImportContactsResult =
+  | { ok: true; inserted: number; skippedExisting: number }
+  | { ok: false; error: string };
+
+const MAX_IMPORT_ROWS = 2000;
+const INSERT_CHUNK = 200;
+
+function cleanStr(v: unknown, max: number): string | null {
+  if (typeof v !== "string") return null;
+  const t = v.trim();
+  return t ? t.slice(0, max) : null;
+}
+
+function cleanDate(v: unknown): string | null {
+  const s = cleanStr(v, 40);
+  if (!s) return null;
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const d = new Date(s);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
+
+export async function importContacts(
+  rows: ImportedContactRow[],
+): Promise<ImportContactsResult> {
+  if (!Array.isArray(rows) || rows.length === 0)
+    return { ok: false, error: "No rows to import." };
+  if (rows.length > MAX_IMPORT_ROWS)
+    return {
+      ok: false,
+      error: `Too many rows (${rows.length}). The limit is ${MAX_IMPORT_ROWS} per import — split the file and try again.`,
+    };
+
+  // Sanitize + drop rows with neither a name nor an email, and dedupe
+  // repeated emails within the file itself.
+  const seenEmails = new Set<string>();
+  const cleaned: {
+    first_name: string | null;
+    last_name: string | null;
+    email: string | null;
+    phone: string | null;
+    contact_source: string | null;
+    contact_type: ContactType;
+    notes: string | null;
+    date_of_birth: string | null;
+  }[] = [];
+  for (const r of rows) {
+    const typeRaw = (cleanStr(r.contact_type, 20) ?? "lead").toLowerCase();
+    const row = {
+      first_name: cleanStr(r.first_name, 120),
+      last_name: cleanStr(r.last_name, 120),
+      email: cleanStr(r.email, 254)?.toLowerCase() ?? null,
+      phone: cleanStr(r.phone, 40),
+      contact_source: cleanStr(r.contact_source, 120),
+      contact_type: isContactType(typeRaw) ? typeRaw : ("lead" as ContactType),
+      notes: cleanStr(r.notes, 2000),
+      date_of_birth: cleanDate(r.date_of_birth),
+    };
+    if (!row.first_name && !row.last_name && !row.email) continue;
+    if (row.email) {
+      if (seenEmails.has(row.email)) continue;
+      seenEmails.add(row.email);
+    }
+    cleaned.push(row);
+  }
+  if (cleaned.length === 0)
+    return { ok: false, error: "No usable rows — every row needs at least a name or an email." };
+
+  const supabase = await createSupabaseServerClient();
+
+  // Skip emails that already belong to a contact instead of failing the
+  // whole insert on the unique constraint.
+  const emails = [...seenEmails];
+  const existing = new Set<string>();
+  for (let i = 0; i < emails.length; i += INSERT_CHUNK) {
+    const { data, error } = await supabase
+      .from("contacts")
+      .select("email")
+      .in("email", emails.slice(i, i + INSERT_CHUNK));
+    if (error) return { ok: false, error: error.message };
+    for (const c of data ?? []) {
+      if (c.email) existing.add(c.email.toLowerCase());
+    }
+  }
+
+  const toInsert = cleaned.filter((r) => !r.email || !existing.has(r.email));
+  const skippedExisting = cleaned.length - toInsert.length;
+
+  let inserted = 0;
+  for (let i = 0; i < toInsert.length; i += INSERT_CHUNK) {
+    const chunk = toInsert.slice(i, i + INSERT_CHUNK);
+    const { error } = await supabase.from("contacts").insert(chunk);
+    if (error)
+      return {
+        ok: false,
+        error: `Import stopped after ${inserted} contacts: ${error.message}`,
+      };
+    inserted += chunk.length;
+  }
+
+  revalidatePath("/contacts");
+  return { ok: true, inserted, skippedExisting };
+}
+
 export type DeleteContactsResult =
   | { ok: true; deleted: number }
   | { ok: false; error: string };

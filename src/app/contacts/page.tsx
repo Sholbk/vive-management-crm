@@ -3,6 +3,7 @@ import AppNav from "@/components/AppNav";
 import ContactsTable, {
   type ContactListRow,
 } from "@/components/contacts/ContactsTable";
+import ImportContactsButton from "@/components/contacts/ImportContactsButton";
 import { CONTACT_TYPES, type ContactType } from "./types";
 
 export const dynamic = "force-dynamic";
@@ -53,12 +54,15 @@ export default async function ContactsPage({
 
       <div className="flex items-center justify-between mb-6">
         <h2 className="text-2xl font-semibold">Contacts</h2>
-        <a
-          href="/contacts/new"
-          className="px-3 py-1.5 bg-brand-accent text-white text-sm font-semibold rounded-md hover:opacity-90"
-        >
-          + New Contact
-        </a>
+        <div className="flex items-center gap-2">
+          <ImportContactsButton />
+          <a
+            href="/contacts/new"
+            className="px-3 py-1.5 bg-brand-accent text-white text-sm font-semibold rounded-md hover:opacity-90"
+          >
+            + New Contact
+          </a>
+        </div>
       </div>
 
       <div className="flex items-center gap-2 mb-4 text-sm">
