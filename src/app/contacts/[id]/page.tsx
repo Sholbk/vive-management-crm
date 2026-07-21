@@ -3,7 +3,11 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import AppNav from "@/components/AppNav";
 import ContactForm, { type AgentOption } from "@/components/ContactForm";
 import DeleteContactButton from "@/components/contacts/DeleteContactButton";
-import { updateContact } from "../actions";
+import {
+  addContactToPipelineForm,
+  markContactAsClientForm,
+  updateContact,
+} from "../actions";
 import type { ContactType } from "../types";
 
 export const dynamic = "force-dynamic";
@@ -41,7 +45,8 @@ export default async function ContactDetailPage({
   const { saved, error: pageError } = await searchParams;
   const supabase = await createSupabaseServerClient();
 
-  const [contactResult, leadsResult, agentsResult] = await Promise.all([
+  const [contactResult, leadsResult, agentsResult, devsResult] =
+    await Promise.all([
     supabase
       .from("contacts")
       .select(
@@ -64,6 +69,12 @@ export default async function ContactDetailPage({
       .returns<
         { id: string; full_name: string | null; email: string | null; role: string }[]
       >(),
+    supabase
+      .from("developments")
+      .select("id, name")
+      .eq("active", true)
+      .order("name")
+      .returns<{ id: string; name: string }[]>(),
   ]);
 
   if (contactResult.error) {
@@ -107,7 +118,19 @@ export default async function ContactDetailPage({
         &larr; Back to contacts
       </a>
 
-      <h2 className="text-2xl font-semibold mb-1">{name}</h2>
+      <div className="flex items-start justify-between gap-4 mb-1">
+        <h2 className="text-2xl font-semibold">{name}</h2>
+        {contact.contact_type === "lead" && (
+          <form action={markContactAsClientForm.bind(null, contact.id)}>
+            <button
+              type="submit"
+              className="px-3 py-1.5 border border-green-600 text-green-700 text-sm font-semibold rounded-md hover:bg-green-50"
+            >
+              Make Client
+            </button>
+          </form>
+        )}
+      </div>
       <p className="text-sm text-text-muted mb-6">
         Added {new Date(contact.created_at).toLocaleDateString()}
       </p>
@@ -157,6 +180,30 @@ export default async function ContactDetailPage({
                 No linked pipeline entries.
               </p>
             )}
+
+            <form
+              action={addContactToPipelineForm.bind(null, contact.id)}
+              className="mt-4 pt-4 border-t border-border space-y-2"
+            >
+              <select
+                name="development_id"
+                required
+                className="w-full px-3 py-2 border border-border rounded-md bg-white text-sm focus:outline-none focus:ring-2 focus:ring-brand-accent"
+              >
+                <option value="">Select a development…</option>
+                {(devsResult.data ?? []).map((d) => (
+                  <option key={d.id} value={d.id}>
+                    {d.name}
+                  </option>
+                ))}
+              </select>
+              <button
+                type="submit"
+                className="w-full px-3 py-2 bg-brand-accent text-white text-sm font-semibold rounded-md hover:opacity-90"
+              >
+                Add to Pipeline
+              </button>
+            </form>
           </div>
         </aside>
       </div>

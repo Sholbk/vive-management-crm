@@ -37,7 +37,15 @@ export default async function ContactsPage({
 
   if (typeFilter) query = query.eq("contact_type", typeFilter);
 
-  const { data, error } = await query.returns<ContactListRow[]>();
+  const [{ data, error }, devsResult] = await Promise.all([
+    query.returns<ContactListRow[]>(),
+    supabase
+      .from("developments")
+      .select("id, name")
+      .eq("active", true)
+      .order("name")
+      .returns<{ id: string; name: string }[]>(),
+  ]);
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
@@ -90,7 +98,9 @@ export default async function ContactsPage({
         <p className="text-text-muted text-sm">No contacts yet.</p>
       )}
 
-      {data && data.length > 0 && <ContactsTable rows={data} />}
+      {data && data.length > 0 && (
+        <ContactsTable rows={data} developments={devsResult.data ?? []} />
+      )}
     </main>
   );
 }
