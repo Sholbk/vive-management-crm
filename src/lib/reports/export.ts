@@ -83,6 +83,16 @@ function buildSections(payload: ExportPayload): Section[] {
       rows: data.byUtmSource.map((r) => [r.key, r.count]),
     },
     {
+      title: "Leads by Tag",
+      headers: ["Tag", "Leads"],
+      rows: [
+        ...data.byTag.map((r): Cell[] => [r.key, r.count]),
+        ...(data.untaggedCount > 0
+          ? [["(no tags)", data.untaggedCount] as Cell[]]
+          : []),
+      ],
+    },
+    {
       title: "By Development",
       headers: ["Development", "Leads", "Won", "Win rate (%)"],
       rows: data.byDevelopment.map((r) => [

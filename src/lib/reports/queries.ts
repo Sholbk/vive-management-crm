@@ -17,6 +17,7 @@ type RawLead = {
   budget_max_cents: number | null;
   development_id: string;
   created_at: string;
+  tags: string[] | null;
   developments: { name: string } | null;
 };
 
@@ -55,6 +56,8 @@ export interface ReportData {
   pipelineValue: PipelineValue;
   bySource: SourceRow[];
   byUtmSource: SourceRow[];
+  byTag: SourceRow[];
+  untaggedCount: number;
   byDevelopment: DevelopmentRow[];
   weekly: WeekBucket[];
 }
@@ -74,7 +77,7 @@ export async function getReportData(
   let query = supabase
     .from("leads")
     .select(
-      "stage, status, source, utm_source, budget_max_cents, development_id, created_at, developments ( name )",
+      "stage, status, source, utm_source, budget_max_cents, development_id, created_at, tags, developments ( name )",
     )
     .order("created_at", { ascending: false })
     .limit(10000);
@@ -94,6 +97,7 @@ export async function getReportData(
   const byUtmSource = groupCount(
     rows.map((r) => r.utm_source).filter((s): s is string => Boolean(s)),
   ).slice(0, 5);
+  const { byTag, untaggedCount } = buildByTag(rows);
   const byDevelopment = buildByDevelopment(rows);
   const weekly = buildWeekly(rows);
 
@@ -103,9 +107,41 @@ export async function getReportData(
     pipelineValue,
     bySource,
     byUtmSource,
+    byTag,
+    untaggedCount,
     byDevelopment,
     weekly,
   };
+}
+
+function buildByTag(rows: RawLead[]): {
+  byTag: SourceRow[];
+  untaggedCount: number;
+} {
+  // Case-insensitive grouping ("VIP" and "vip" are one tag), displaying the
+  // first casing seen. A lead with the same tag twice counts once.
+  const m = new Map<string, { label: string; count: number }>();
+  let untaggedCount = 0;
+  for (const r of rows) {
+    const tags = (r.tags ?? []).map((t) => t.trim()).filter(Boolean);
+    if (tags.length === 0) {
+      untaggedCount++;
+      continue;
+    }
+    const seen = new Set<string>();
+    for (const tag of tags) {
+      const key = tag.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      const entry = m.get(key) ?? { label: tag, count: 0 };
+      entry.count += 1;
+      m.set(key, entry);
+    }
+  }
+  const byTag = [...m.values()]
+    .map(({ label, count }) => ({ key: label, count }))
+    .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
+  return { byTag, untaggedCount };
 }
 
 function buildFunnel(rows: RawLead[]): FunnelRow[] {
