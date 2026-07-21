@@ -15,6 +15,16 @@ export interface CalendarAppointment {
   leadTitle: string | null;
 }
 
+export interface CalendarTask {
+  id: string;
+  title: string;
+  /** Plain YYYY-MM-DD from the date column — no timezone conversion. */
+  dueDate: string;
+  completed: boolean;
+  leadId: string;
+  leadTitle: string | null;
+}
+
 const MONTH_NAMES = [
   "January",
   "February",
@@ -51,6 +61,8 @@ export default function MonthCalendar({
   appointments,
   upcoming,
   past,
+  tasks,
+  openTasks,
   leadOptions,
   initialApptId,
 }: {
@@ -61,6 +73,10 @@ export default function MonthCalendar({
   upcoming: CalendarAppointment[];
   /** Most recent past appointments, descending. */
   past: CalendarAppointment[];
+  /** Tasks due within the visible grid. */
+  tasks: CalendarTask[];
+  /** All incomplete dated tasks, soonest first (sidebar). */
+  openTasks: CalendarTask[];
   leadOptions: LeadOption[];
   /** Opens this appointment's edit dialog on load (sidebar cross-month nav). */
   initialApptId?: string;
@@ -110,6 +126,14 @@ export default function MonthCalendar({
     }
   }
 
+  // due_date is a plain date, so tasks bucket by exact string — safe to
+  // render server-side, no hydration gate needed.
+  const tasksByDay = new Map<string, CalendarTask[]>();
+  for (const t of tasks) {
+    if (!tasksByDay.has(t.dueDate)) tasksByDay.set(t.dueDate, []);
+    tasksByDay.get(t.dueDate)!.push(t);
+  }
+
   const prev = new Date(year, month - 1, 1);
   const next = new Date(year, month + 1, 1);
   const todayKey = mounted ? dayKey(new Date()) : null;
@@ -118,6 +142,10 @@ export default function MonthCalendar({
   // never claim appointments the grid doesn't show.
   const visibleCount = cells.reduce(
     (n, d) => n + (byDay.get(dayKey(d))?.length ?? 0),
+    0,
+  );
+  const visibleTaskCount = cells.reduce(
+    (n, d) => n + (tasksByDay.get(dayKey(d))?.length ?? 0),
     0,
   );
 
@@ -191,7 +219,11 @@ export default function MonthCalendar({
           </h3>
           <p className="text-sm text-text-muted">
             {mounted
-              ? `${visibleCount} appointment${visibleCount === 1 ? "" : "s"}`
+              ? `${visibleCount} appointment${visibleCount === 1 ? "" : "s"}${
+                  visibleTaskCount > 0
+                    ? ` · ${visibleTaskCount} task${visibleTaskCount === 1 ? "" : "s"}`
+                    : ""
+                }`
               : " "}
           </p>
         </div>
@@ -261,6 +293,28 @@ export default function MonthCalendar({
                       +{items.length - 3} more
                     </li>
                   )}
+                  {(tasksByDay.get(key) ?? []).slice(0, 2).map((t) => (
+                    <li key={t.id}>
+                      <a
+                        href={`/leads/${t.leadId}`}
+                        onClick={(e) => e.stopPropagation()}
+                        title={`Task${t.leadTitle ? ` — ${t.leadTitle}` : ""}: ${t.title}`}
+                        className={`block w-full text-left text-[11px] truncate px-1.5 py-0.5 rounded border ${
+                          t.completed
+                            ? "border-border bg-surface-muted text-text-muted line-through"
+                            : "border-amber-300 bg-amber-50 text-amber-900"
+                        }`}
+                      >
+                        ✓ {t.title}
+                      </a>
+                    </li>
+                  ))}
+                  {(tasksByDay.get(key)?.length ?? 0) > 2 && (
+                    <li className="text-[11px] text-text-muted">
+                      +{(tasksByDay.get(key)?.length ?? 0) - 2} more task
+                      {(tasksByDay.get(key)?.length ?? 0) - 2 === 1 ? "" : "s"}
+                    </li>
+                  )}
                 </ul>
               </div>
             );
@@ -272,6 +326,7 @@ export default function MonthCalendar({
         <AppointmentsSidebar
           upcoming={upcomingList}
           past={pastList}
+          tasks={openTasks}
           onSelect={openFromSidebar}
         />
       ) : (
