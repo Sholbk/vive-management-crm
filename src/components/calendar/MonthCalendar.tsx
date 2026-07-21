@@ -204,8 +204,22 @@ export default function MonthCalendar({
   return (
     <div className="grid lg:grid-cols-[1fr_300px] gap-6 items-start">
       <div>
-        <div className="flex items-center justify-between mb-4">
-          <div className="flex items-center gap-2">
+        <div className="mb-4 space-y-3">
+          <div className="flex items-baseline justify-between gap-3">
+            <h3 className="text-2xl font-semibold whitespace-nowrap">
+              {MONTH_NAMES[month]} {year}
+            </h3>
+            <p className="text-sm text-text-muted">
+              {mounted
+                ? `${visibleCount} appointment${visibleCount === 1 ? "" : "s"}${
+                    visibleTaskCount > 0
+                      ? ` · ${visibleTaskCount} task${visibleTaskCount === 1 ? "" : "s"}`
+                      : ""
+                  }`
+                : " "}
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
             <a
               href={calHref(ym(prev.getFullYear(), prev.getMonth()))}
               className="px-3 py-1 border border-border rounded text-sm hover:bg-surface-muted"
@@ -244,18 +258,6 @@ export default function MonthCalendar({
               </select>
             </label>
           </div>
-          <h3 className="text-xl font-semibold">
-            {MONTH_NAMES[month]} {year}
-          </h3>
-          <p className="text-sm text-text-muted">
-            {mounted
-              ? `${visibleCount} appointment${visibleCount === 1 ? "" : "s"}${
-                  visibleTaskCount > 0
-                    ? ` · ${visibleTaskCount} task${visibleTaskCount === 1 ? "" : "s"}`
-                    : ""
-                }`
-              : " "}
-          </p>
         </div>
 
         <div className="grid grid-cols-7 bg-white border border-border rounded-lg overflow-hidden">
