@@ -38,13 +38,22 @@ export async function GET(request: NextRequest) {
   const range: Range = isRange(params.get("range")) ? (params.get("range") as Range) : "all";
   const ownerId = params.get("owner") || null;
   const developmentId = params.get("development") || null;
+  const isYmd = (v: string | null): v is string => /^\d{4}-\d{2}-\d{2}$/.test(v ?? "");
+  const from = isYmd(params.get("from")) ? params.get("from") : null;
+  const to = isYmd(params.get("to")) ? params.get("to") : null;
+  const tags = (params.get("tags") ?? "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
+
+  const filters = { ownerId, developmentId, from, to, tags };
 
   try {
     // All reads go through the RLS-bound client, so the export can never
     // contain a lead the requester couldn't already open in the UI.
     const [data, leads, stageLabels] = await Promise.all([
-      getReportData(supabase, range, { ownerId, developmentId }),
-      getReportLeads(supabase, range, { ownerId, developmentId }),
+      getReportData(supabase, range, filters),
+      getReportLeads(supabase, range, filters),
       getStageLabels(supabase),
     ]);
 
@@ -75,7 +84,11 @@ export async function GET(request: NextRequest) {
       leads,
       stageLabels,
       meta: {
-        rangeLabel: RANGE_LABELS[range],
+        rangeLabel:
+          from || to
+            ? `${from ?? "Beginning"} to ${to ?? "today"}`
+            : RANGE_LABELS[range],
+        tagsLabel: tags.length > 0 ? tags.join(", ") : "All",
         developmentLabel:
           (devRow.data as { name: string } | null)?.name ?? "All developments",
         ownerLabel: owner
@@ -86,7 +99,8 @@ export async function GET(request: NextRequest) {
     };
 
     const stamp = new Date().toISOString().slice(0, 10);
-    const filename = `vive-crm-report-${range}-${stamp}.${format}`;
+    const rangePart = from || to ? "custom" : range;
+    const filename = `vive-crm-report-${rangePart}-${stamp}.${format}`;
 
     if (format === "csv") {
       return new NextResponse(buildReportCsv(payload), {
