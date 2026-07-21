@@ -2,6 +2,7 @@ import { createSupabaseServerClient } from "@/lib/supabase/server";
 import AppNav from "@/components/AppNav";
 import MonthCalendar, {
   type CalendarAppointment,
+  type CalendarTask,
 } from "@/components/calendar/MonthCalendar";
 import type { LeadOption } from "@/components/calendar/AppointmentDialog";
 
@@ -32,6 +33,44 @@ type LeadRow = {
   first_name: string | null;
   last_name: string | null;
 };
+
+type TaskRow = {
+  id: string;
+  title: string;
+  due_date: string;
+  completed: boolean;
+  lead_id: string;
+  leads: { title: string | null; first_name: string | null; last_name: string | null } | null;
+};
+
+const TASK_SELECT =
+  "id, title, due_date, completed, lead_id, leads ( title, first_name, last_name )";
+
+function leadLabel(
+  lead: { title: string | null; first_name: string | null; last_name: string | null } | null,
+): string | null {
+  if (!lead) return null;
+  return (
+    lead.title?.trim() ||
+    [lead.first_name, lead.last_name].filter(Boolean).join(" ") ||
+    null
+  );
+}
+
+function toTask(r: TaskRow): CalendarTask {
+  return {
+    id: r.id,
+    title: r.title,
+    dueDate: r.due_date,
+    completed: r.completed,
+    leadId: r.lead_id,
+    leadTitle: leadLabel(r.leads),
+  };
+}
+
+function ymd(d: Date): string {
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(d.getDate()).padStart(2, "0")}`;
+}
 
 const APPT_SELECT =
   "id, title, scheduled_at, status, notes, lead_id, leads ( title )";
@@ -74,7 +113,7 @@ export default async function CalendarPage({
   const nowIso = new Date().toISOString();
   const past90Iso = new Date(Date.now() - 90 * 86_400_000).toISOString();
 
-  const [gridResult, upcomingResult, pastResult, leadsResult] =
+  const [gridResult, upcomingResult, pastResult, leadsResult, gridTasksResult, openTasksResult] =
     await Promise.all([
       supabase
         .from("lead_appointments")
@@ -104,11 +143,32 @@ export default async function CalendarPage({
         .order("created_at", { ascending: false })
         .limit(500)
         .returns<LeadRow[]>(),
+      // Tasks due within the visible grid. due_date is a plain date, so the
+      // grid window compares as date strings — no timezone bucketing needed.
+      supabase
+        .from("lead_tasks")
+        .select(TASK_SELECT)
+        .gte("due_date", ymd(start))
+        .lt("due_date", ymd(end))
+        .order("due_date")
+        .returns<TaskRow[]>(),
+      // Sidebar: every incomplete dated task, soonest first, so overdue ones
+      // stay visible whatever month the grid shows.
+      supabase
+        .from("lead_tasks")
+        .select(TASK_SELECT)
+        .eq("completed", false)
+        .not("due_date", "is", null)
+        .order("due_date")
+        .limit(25)
+        .returns<TaskRow[]>(),
     ]);
 
   const appointments = (gridResult.data ?? []).map(toAppointment);
   const upcoming = (upcomingResult.data ?? []).map(toAppointment);
   const past = (pastResult.data ?? []).map(toAppointment);
+  const gridTasks = (gridTasksResult.data ?? []).map(toTask);
+  const openTasks = (openTasksResult.data ?? []).map(toTask);
 
   const leadOptions: LeadOption[] = (leadsResult.data ?? []).map((l) => ({
     id: l.id,
@@ -128,6 +188,8 @@ export default async function CalendarPage({
         appointments={appointments}
         upcoming={upcoming}
         past={past}
+        tasks={gridTasks}
+        openTasks={openTasks}
         leadOptions={leadOptions}
         initialApptId={appt}
       />
