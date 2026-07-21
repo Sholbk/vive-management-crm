@@ -172,6 +172,12 @@ export default async function ContactDetailPage({
                     <p className="text-text-muted text-xs">
                       {new Date(l.created_at).toLocaleDateString()}
                     </p>
+                    <a
+                      href={`/leads/${l.id}`}
+                      className="inline-block mt-1.5 px-2.5 py-1 border border-brand-accent text-brand-accent text-xs font-semibold rounded hover:bg-brand-accent/10"
+                    >
+                      View Opportunity &rarr;
+                    </a>
                   </li>
                 ))}
               </ul>
