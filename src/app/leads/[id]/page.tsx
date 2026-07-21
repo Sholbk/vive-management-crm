@@ -17,6 +17,7 @@ import Activities, {
 import DocumentsSection, {
   type LeadAttachment,
 } from "@/components/leads/Documents";
+import DeleteLeadButton from "@/components/leads/DeleteLeadButton";
 
 export const dynamic = "force-dynamic";
 
@@ -555,6 +556,10 @@ export default async function LeadDetailPage({
 
       <div className="mt-6">
         <DocumentsSection leadId={lead.id} attachments={attachments} />
+      </div>
+
+      <div className="mt-6">
+        <DeleteLeadButton leadId={lead.id} leadTitle={title} />
       </div>
     </main>
   );
