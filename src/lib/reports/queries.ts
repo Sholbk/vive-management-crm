@@ -65,6 +65,46 @@ export interface ReportData {
 export interface ReportFilters {
   ownerId?: string | null;
   developmentId?: string | null;
+  /** Inclusive YYYY-MM-DD bounds; when either is set, `range` is ignored. */
+  from?: string | null;
+  to?: string | null;
+  /** Case-insensitive; a lead matches if it carries ANY selected tag. */
+  tags?: string[];
+}
+
+function nextDay(ymd: string): string {
+  const d = new Date(`${ymd}T00:00:00Z`);
+  d.setUTCDate(d.getUTCDate() + 1);
+  return d.toISOString().slice(0, 10);
+}
+
+function applyDateBounds<Q extends { gte: any; lt: any }>(
+  query: Q,
+  range: Range,
+  filters: ReportFilters,
+): Q {
+  if (filters.from || filters.to) {
+    let q = query;
+    if (filters.from) q = q.gte("created_at", filters.from);
+    if (filters.to) q = q.lt("created_at", nextDay(filters.to));
+    return q;
+  }
+  const dateFrom = rangeToDate(range);
+  return dateFrom ? query.gte("created_at", dateFrom) : query;
+}
+
+function matchesTags(
+  leadTags: string[] | null,
+  wanted: Set<string>,
+): boolean {
+  if (wanted.size === 0) return true;
+  return (leadTags ?? []).some((t) => wanted.has(t.trim().toLowerCase()));
+}
+
+function wantedTagSet(filters: ReportFilters): Set<string> {
+  return new Set(
+    (filters.tags ?? []).map((t) => t.trim().toLowerCase()).filter(Boolean),
+  );
 }
 
 export async function getReportData(
@@ -72,8 +112,6 @@ export async function getReportData(
   range: Range,
   filters: ReportFilters = {},
 ): Promise<ReportData> {
-  const dateFrom = rangeToDate(range);
-
   let query = supabase
     .from("leads")
     .select(
@@ -82,14 +120,17 @@ export async function getReportData(
     .order("created_at", { ascending: false })
     .limit(10000);
 
-  if (dateFrom) query = query.gte("created_at", dateFrom);
+  query = applyDateBounds(query, range, filters);
   if (filters.ownerId) query = query.eq("assigned_agent_id", filters.ownerId);
   if (filters.developmentId)
     query = query.eq("development_id", filters.developmentId);
 
   const { data: leads, error } = await query.returns<RawLead[]>();
   if (error) throw error;
-  const rows = leads ?? [];
+  // Tag matching is done in JS so "VIP" and "vip" filter as one tag —
+  // Postgres array overlap is case-sensitive.
+  const wanted = wantedTagSet(filters);
+  const rows = (leads ?? []).filter((r) => matchesTags(r.tags, wanted));
 
   const funnel = buildFunnel(rows);
   const pipelineValue = buildPipelineValue(rows);
@@ -267,6 +308,7 @@ export interface ExportLead {
   budget_max_cents: number | null;
   timeline: string | null;
   financing: string | null;
+  tags: string[] | null;
   assigned_agent: string;
 }
 
@@ -288,24 +330,23 @@ export async function getReportLeads(
   range: Range,
   filters: ReportFilters = {},
 ): Promise<ExportLead[]> {
-  const dateFrom = rangeToDate(range);
-
   let query = supabase
     .from("leads")
     .select(
-      "created_at, first_name, last_name, email, phone, stage, status, source, utm_source, utm_medium, utm_campaign, budget_min_cents, budget_max_cents, timeline, financing, assigned_agent_id, developments ( name )",
+      "created_at, first_name, last_name, email, phone, stage, status, source, utm_source, utm_medium, utm_campaign, budget_min_cents, budget_max_cents, timeline, financing, tags, assigned_agent_id, developments ( name )",
     )
     .order("created_at", { ascending: false })
     .limit(10000);
 
-  if (dateFrom) query = query.gte("created_at", dateFrom);
+  query = applyDateBounds(query, range, filters);
   if (filters.ownerId) query = query.eq("assigned_agent_id", filters.ownerId);
   if (filters.developmentId)
     query = query.eq("development_id", filters.developmentId);
 
   const { data, error } = await query.returns<RawExportLead[]>();
   if (error) throw error;
-  const rows = data ?? [];
+  const wanted = wantedTagSet(filters);
+  const rows = (data ?? []).filter((r) => matchesTags(r.tags, wanted));
 
   const agentIds = [
     ...new Set(rows.map((r) => r.assigned_agent_id).filter(Boolean)),
@@ -340,6 +381,7 @@ export async function getReportLeads(
     budget_max_cents: r.budget_max_cents,
     timeline: r.timeline,
     financing: r.financing,
+    tags: r.tags,
     assigned_agent: r.assigned_agent_id
       ? (agentNames.get(r.assigned_agent_id) ?? "—")
       : "Unassigned",

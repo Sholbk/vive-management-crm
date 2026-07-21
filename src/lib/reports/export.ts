@@ -8,6 +8,7 @@ export interface ExportPayload {
   stageLabels: StageLabelMap;
   meta: {
     rangeLabel: string;
+    tagsLabel: string;
     developmentLabel: string;
     ownerLabel: string;
     generatedAt: Date;
@@ -47,6 +48,7 @@ function buildSections(payload: ExportPayload): Section[] {
       headers: ["Metric", "Value"],
       rows: [
         ["Date range", meta.rangeLabel],
+        ["Tags", meta.tagsLabel],
         ["Development", meta.developmentLabel],
         ["Assigned agent", meta.ownerLabel],
         ["Total leads", data.totalLeads],
@@ -126,6 +128,7 @@ function buildSections(payload: ExportPayload): Section[] {
         "Budget max (USD)",
         "Timeline",
         "Financing",
+        "Tags",
         "Assigned agent",
       ],
       rows: payload.leads.map((l) => [
@@ -145,6 +148,7 @@ function buildSections(payload: ExportPayload): Section[] {
         dollars(l.budget_max_cents),
         l.timeline ?? "",
         l.financing ?? "",
+        (l.tags ?? []).join(", "),
         l.assigned_agent,
       ]),
     },

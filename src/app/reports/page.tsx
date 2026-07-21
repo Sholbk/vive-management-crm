@@ -17,6 +17,10 @@ function isRange(value: string | undefined): value is Range {
   return ["7d", "30d", "90d", "all"].includes(value ?? "");
 }
 
+function isYmd(value: string | undefined): value is string {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value ?? "");
+}
+
 export default async function ReportsPage({
   searchParams,
 }: {
@@ -24,19 +28,35 @@ export default async function ReportsPage({
     range?: string;
     owner?: string;
     development?: string;
+    from?: string;
+    to?: string;
+    tags?: string;
   }>;
 }) {
   const params = await searchParams;
   const range: Range = isRange(params.range) ? params.range : "all";
   const ownerId = params.owner || null;
   const developmentId = params.development || null;
+  const from = isYmd(params.from) ? params.from : null;
+  const to = isYmd(params.to) ? params.to : null;
+  const selectedTags = (params.tags ?? "")
+    .split(",")
+    .map((t) => t.trim())
+    .filter(Boolean);
 
   const supabase = await createSupabaseServerClient();
-  const [data, stageLabels, agentsResult, devsResult] = await Promise.all([
-    getReportData(supabase, range, { ownerId, developmentId }).catch((err) => {
-      console.error("Reports load failed", err);
-      return null;
-    }),
+  const [data, stageLabels, agentsResult, devsResult, tagRowsResult] =
+    await Promise.all([
+      getReportData(supabase, range, {
+        ownerId,
+        developmentId,
+        from,
+        to,
+        tags: selectedTags,
+      }).catch((err) => {
+        console.error("Reports load failed", err);
+        return null;
+      }),
     getStageLabels(supabase),
     supabase
       .from("profiles")
@@ -58,12 +78,30 @@ export default async function ReportsPage({
       .eq("active", true)
       .order("name")
       .returns<{ id: string; name: string }[]>(),
+    supabase
+      .from("leads")
+      .select("tags")
+      .not("tags", "is", null)
+      .limit(10000)
+      .returns<{ tags: string[] | null }[]>(),
   ]);
 
   const agents = (agentsResult.data ?? []).map((p) => ({
     id: p.id,
     label: p.full_name || p.email || "Unnamed",
   }));
+
+  // Distinct tags across all leads (case-insensitive, first casing wins),
+  // independent of the current filters so options never vanish mid-filtering.
+  const tagMap = new Map<string, string>();
+  for (const row of tagRowsResult.data ?? []) {
+    for (const raw of row.tags ?? []) {
+      const tag = raw.trim();
+      if (tag && !tagMap.has(tag.toLowerCase()))
+        tagMap.set(tag.toLowerCase(), tag);
+    }
+  }
+  const tagOptions = [...tagMap.values()].sort((a, b) => a.localeCompare(b));
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
@@ -75,6 +113,9 @@ export default async function ReportsPage({
           range={range}
           ownerId={ownerId}
           developmentId={developmentId}
+          from={from}
+          to={to}
+          tags={selectedTags}
         />
       </div>
 
@@ -82,6 +123,10 @@ export default async function ReportsPage({
         range={range}
         ownerId={ownerId}
         developmentId={developmentId}
+        from={from}
+        to={to}
+        selectedTags={selectedTags}
+        tagOptions={tagOptions}
         agents={agents}
         developments={devsResult.data ?? []}
       />

@@ -10,14 +10,23 @@ export default function ExportButtons({
   range,
   ownerId,
   developmentId,
+  from,
+  to,
+  tags,
 }: {
   range: Range;
   ownerId: string | null;
   developmentId: string | null;
+  from: string | null;
+  to: string | null;
+  tags: string[];
 }) {
   const params = new URLSearchParams({ range });
   if (ownerId) params.set("owner", ownerId);
   if (developmentId) params.set("development", developmentId);
+  if (from) params.set("from", from);
+  if (to) params.set("to", to);
+  if (tags.length > 0) params.set("tags", tags.join(","));
 
   const href = (format: "xlsx" | "csv") =>
     `/reports/export?${params.toString()}&format=${format}`;
