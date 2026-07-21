@@ -128,3 +128,69 @@ export async function updateLead(leadId: string, formData: FormData) {
   revalidatePath(`/leads/${leadId}`);
   redirect(`/leads/${leadId}?saved=1`);
 }
+
+export type DeleteLeadResult = { ok: true } | { ok: false; error: string };
+
+export async function deleteLead(leadId: string): Promise<DeleteLeadResult> {
+  if (typeof leadId !== "string" || leadId.length === 0) {
+    return { ok: false, error: "No opportunity selected." };
+  }
+
+  const supabase = await createSupabaseServerClient();
+
+  // Grab attachment storage paths up front: the lead_attachments rows cascade
+  // away with the lead, but the objects in Storage would otherwise be orphaned.
+  const { data: attachmentRows } = await supabase
+    .from("lead_attachments")
+    .select("bucket, path")
+    .eq("lead_id", leadId)
+    .returns<{ bucket: string; path: string }[]>();
+
+  const { data: deleted, error } = await supabase
+    .from("leads")
+    .delete()
+    .eq("id", leadId)
+    .select("id");
+
+  if (error) {
+    // Every child table (tasks, notes, appointments, payments, followers,
+    // additional contacts, activities, attachments) is on delete cascade, but
+    // be defensive in case a future FK restricts the delete.
+    const friendly =
+      error.code === "23503"
+        ? "This opportunity is linked to other records and can't be deleted."
+        : error.message;
+    return { ok: false, error: friendly };
+  }
+
+  // RLS makes delete admin-only (leads_admin_all): for non-admins the delete
+  // silently matches zero rows, so surface that instead of pretending it
+  // worked.
+  if (!deleted || deleted.length === 0) {
+    return {
+      ok: false,
+      error:
+        "The opportunity was not deleted. Deleting opportunities requires an admin account.",
+    };
+  }
+
+  // Best-effort Storage cleanup now that the delete definitely happened.
+  // Failures here leave orphaned files but shouldn't fail the delete.
+  const byBucket = new Map<string, string[]>();
+  for (const row of attachmentRows ?? []) {
+    const paths = byBucket.get(row.bucket) ?? [];
+    paths.push(row.path);
+    byBucket.set(row.bucket, paths);
+  }
+  for (const [bucket, paths] of byBucket) {
+    const { error: storageErr } = await supabase.storage
+      .from(bucket)
+      .remove(paths);
+    if (storageErr) {
+      console.error("Failed to remove attachments for deleted lead", storageErr);
+    }
+  }
+
+  revalidatePath("/leads");
+  return { ok: true };
+}
