@@ -32,12 +32,15 @@ export default async function CalendarPage({
   const { ym } = await searchParams;
   const { year, month } = parseYm(ym);
 
-  // Fetch appointments that start within the visible range:
-  // 6 weeks rendered, so widen by a few days on each side.
-  const start = new Date(year, month, 1);
-  start.setDate(start.getDate() - 7);
-  const end = new Date(year, month + 1, 1);
-  end.setDate(end.getDate() + 7);
+  // Fetch appointments that fall within the visible 6x7 grid: it starts on
+  // the Sunday on or before the 1st and spans 42 days. Widen by one day on
+  // each side so viewer-timezone day bucketing (done in the browser) can't
+  // miss an appointment near the grid edges. Anything fetched that lands
+  // outside the grid simply isn't rendered or counted.
+  const first = new Date(year, month, 1);
+  const start = new Date(year, month, 1 - first.getDay() - 1);
+  const end = new Date(start);
+  end.setDate(end.getDate() + 42 + 2);
 
   const supabase = await createSupabaseServerClient();
   const { data } = await supabase

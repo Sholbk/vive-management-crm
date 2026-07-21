@@ -1,3 +1,7 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
 export interface CalendarAppointment {
   id: string;
   title: string;
@@ -42,6 +46,8 @@ export default function MonthCalendar({
   appointments: CalendarAppointment[];
 }) {
   // 6x7 grid starting from the Sunday on or before the 1st of the month.
+  // This math only uses year/month/day parts, so it's timezone-independent
+  // and safe to render on the server.
   const first = new Date(year, month, 1);
   const start = new Date(first);
   start.setDate(first.getDate() - first.getDay());
@@ -53,18 +59,39 @@ export default function MonthCalendar({
     cells.push(d);
   }
 
-  // Bucket appointments by local day.
+  // Which *day* a UTC timestamp falls on depends on the viewer's timezone,
+  // which only the browser knows (the server renders in UTC on Netlify).
+  // Bucket after mount so server HTML never disagrees with the client and
+  // evening appointments don't shift into the wrong day cell.
+  const [mounted, setMounted] = useState(false);
+  useEffect(() => setMounted(true), []);
+
   const byDay = new Map<string, CalendarAppointment[]>();
-  for (const a of appointments) {
-    const d = new Date(a.scheduledAt);
-    const key = dayKey(d);
-    if (!byDay.has(key)) byDay.set(key, []);
-    byDay.get(key)!.push(a);
+  if (mounted) {
+    for (const a of appointments) {
+      const key = dayKey(new Date(a.scheduledAt));
+      if (!byDay.has(key)) byDay.set(key, []);
+      byDay.get(key)!.push(a);
+    }
   }
 
   const prev = new Date(year, month - 1, 1);
   const next = new Date(year, month + 1, 1);
-  const todayKey = dayKey(new Date());
+  const todayKey = mounted ? dayKey(new Date()) : null;
+
+  // Count only what actually renders in the visible grid, so the header can
+  // never claim appointments the grid doesn't show.
+  const visibleCount = cells.reduce(
+    (n, d) => n + (byDay.get(dayKey(d))?.length ?? 0),
+    0,
+  );
+
+  // "Today" resolves the current month in the viewer's timezone; the bare
+  // /calendar fallback (server clock) is only used pre-hydration.
+  const now = new Date();
+  const todayHref = mounted
+    ? `/calendar?ym=${ym(now.getFullYear(), now.getMonth())}`
+    : "/calendar";
 
   return (
     <div>
@@ -77,7 +104,7 @@ export default function MonthCalendar({
             ←
           </a>
           <a
-            href="/calendar"
+            href={todayHref}
             className="px-3 py-1 border border-border rounded text-sm hover:bg-surface-muted"
           >
             Today
@@ -93,7 +120,9 @@ export default function MonthCalendar({
           {MONTH_NAMES[month]} {year}
         </h3>
         <p className="text-sm text-text-muted">
-          {appointments.length} appointment{appointments.length === 1 ? "" : "s"}
+          {mounted
+            ? `${visibleCount} appointment${visibleCount === 1 ? "" : "s"}`
+            : " "}
         </p>
       </div>
 
