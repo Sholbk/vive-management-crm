@@ -1,32 +1,17 @@
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import AppNav from "@/components/AppNav";
+import ContactsTable, {
+  type ContactListRow,
+} from "@/components/contacts/ContactsTable";
 import { CONTACT_TYPES, type ContactType } from "./types";
 
 export const dynamic = "force-dynamic";
-
-type ContactRow = {
-  id: string;
-  first_name: string | null;
-  last_name: string | null;
-  email: string | null;
-  phone: string | null;
-  contact_source: string | null;
-  contact_type: ContactType;
-  created_at: string;
-};
 
 const TYPE_LABELS: Record<ContactType, string> = {
   lead: "Lead",
   client: "Client",
   vendor: "Vendor",
   other: "Other",
-};
-
-const TYPE_COLORS: Record<ContactType, string> = {
-  lead: "bg-blue-100 text-blue-800",
-  client: "bg-green-100 text-green-800",
-  vendor: "bg-amber-100 text-amber-800",
-  other: "bg-gray-100 text-gray-700",
 };
 
 export default async function ContactsPage({
@@ -52,7 +37,7 @@ export default async function ContactsPage({
 
   if (typeFilter) query = query.eq("contact_type", typeFilter);
 
-  const { data, error } = await query.returns<ContactRow[]>();
+  const { data, error } = await query.returns<ContactListRow[]>();
 
   return (
     <main className="max-w-6xl mx-auto px-4 py-8">
@@ -105,64 +90,7 @@ export default async function ContactsPage({
         <p className="text-text-muted text-sm">No contacts yet.</p>
       )}
 
-      {data && data.length > 0 && (
-        <div className="border border-border bg-white rounded-lg overflow-hidden">
-          <table className="w-full text-sm">
-            <thead className="bg-surface-muted text-text-muted">
-              <tr>
-                <th className="text-left px-3 py-2 font-medium">Name</th>
-                <th className="text-left px-3 py-2 font-medium">Email</th>
-                <th className="text-left px-3 py-2 font-medium">Phone</th>
-                <th className="text-left px-3 py-2 font-medium">Type</th>
-                <th className="text-left px-3 py-2 font-medium">Source</th>
-                <th className="text-left px-3 py-2 font-medium">Added</th>
-              </tr>
-            </thead>
-            <tbody>
-              {data.map((c) => {
-                const name =
-                  [c.first_name, c.last_name].filter(Boolean).join(" ") || "—";
-                return (
-                  <tr
-                    key={c.id}
-                    className="border-t border-border hover:bg-surface-muted/50"
-                  >
-                    <td className="px-3 py-2">
-                      <a
-                        href={`/contacts/${c.id}`}
-                        className="text-brand-accent hover:underline font-medium"
-                      >
-                        {name}
-                      </a>
-                    </td>
-                    <td className="px-3 py-2 text-text-muted">
-                      {c.email ?? "—"}
-                    </td>
-                    <td className="px-3 py-2 text-text-muted">
-                      {c.phone ?? "—"}
-                    </td>
-                    <td className="px-3 py-2">
-                      <span
-                        className={`px-2 py-0.5 rounded text-xs font-semibold ${
-                          TYPE_COLORS[c.contact_type]
-                        }`}
-                      >
-                        {TYPE_LABELS[c.contact_type]}
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-text-muted">
-                      {c.contact_source ?? "—"}
-                    </td>
-                    <td className="px-3 py-2 text-text-muted whitespace-nowrap">
-                      {new Date(c.created_at).toLocaleDateString()}
-                    </td>
-                  </tr>
-                );
-              })}
-            </tbody>
-          </table>
-        </div>
-      )}
+      {data && data.length > 0 && <ContactsTable rows={data} />}
     </main>
   );
 }

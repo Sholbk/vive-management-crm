@@ -115,3 +115,48 @@ export async function updateContact(contactId: string, formData: FormData) {
   revalidatePath(`/contacts/${contactId}`);
   redirect(`/contacts/${contactId}?saved=1`);
 }
+
+export type DeleteContactsResult =
+  | { ok: true; deleted: number }
+  | { ok: false; error: string };
+
+export async function deleteContacts(
+  contactIds: string[],
+): Promise<DeleteContactsResult> {
+  const ids = contactIds.filter((id) => typeof id === "string" && id.length > 0);
+  if (ids.length === 0) return { ok: false, error: "No contacts selected." };
+
+  const supabase = await createSupabaseServerClient();
+
+  const { data: deleted, error } = await supabase
+    .from("contacts")
+    .delete()
+    .in("id", ids)
+    .select("id");
+
+  if (error) {
+    // Leads and documents unlink automatically (on delete set null), but be
+    // defensive in case a future FK restricts the delete.
+    const friendly =
+      error.code === "23503"
+        ? "This contact is linked to other records and can't be deleted."
+        : error.message;
+    return { ok: false, error: friendly };
+  }
+
+  // RLS makes delete admin-only (contacts_admin_all): for non-admins the
+  // delete silently matches zero rows, so surface that instead of pretending
+  // it worked.
+  if (!deleted || deleted.length === 0) {
+    return {
+      ok: false,
+      error:
+        "No contacts were deleted. Deleting contacts requires an admin account.",
+    };
+  }
+
+  revalidatePath("/contacts");
+  // Deleting a contact unlinks any pipeline entries (contact_id set to null).
+  revalidatePath("/leads");
+  return { ok: true, deleted: deleted.length };
+}

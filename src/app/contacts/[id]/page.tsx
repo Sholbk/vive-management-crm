@@ -2,6 +2,7 @@ import { notFound } from "next/navigation";
 import { createSupabaseServerClient } from "@/lib/supabase/server";
 import AppNav from "@/components/AppNav";
 import ContactForm, { type AgentOption } from "@/components/ContactForm";
+import DeleteContactButton from "@/components/contacts/DeleteContactButton";
 import { updateContact } from "../actions";
 import type { ContactType } from "../types";
 
@@ -158,6 +159,10 @@ export default async function ContactDetailPage({
             )}
           </div>
         </aside>
+      </div>
+
+      <div className="mt-8 border-t border-border pt-6">
+        <DeleteContactButton contactId={contact.id} contactName={name} />
       </div>
     </main>
   );
