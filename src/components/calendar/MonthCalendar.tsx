@@ -64,6 +64,8 @@ export default function MonthCalendar({
   tasks,
   openTasks,
   leadOptions,
+  agents,
+  agentId,
   initialApptId,
 }: {
   year: number;
@@ -78,11 +80,22 @@ export default function MonthCalendar({
   /** All incomplete dated tasks, soonest first (sidebar). */
   openTasks: CalendarTask[];
   leadOptions: LeadOption[];
+  agents: { id: string; label: string }[];
+  agentId: string | null;
   /** Opens this appointment's edit dialog on load (sidebar cross-month nav). */
   initialApptId?: string;
 }) {
   const router = useRouter();
   const [dialog, setDialog] = useState<DialogState>(null);
+
+  function calHref(ymStr: string | null, extra?: Record<string, string>) {
+    const sp = new URLSearchParams();
+    if (ymStr) sp.set("ym", ymStr);
+    if (agentId) sp.set("agent", agentId);
+    for (const [k, v] of Object.entries(extra ?? {})) sp.set(k, v);
+    const q = sp.toString();
+    return q ? `/calendar?${q}` : "/calendar";
+  }
 
   // 6x7 grid starting from the Sunday on or before the 1st of the month.
   // This math only uses year/month/day parts, so it's timezone-independent
@@ -153,8 +166,8 @@ export default function MonthCalendar({
   // /calendar fallback (server clock) is only used pre-hydration.
   const now = new Date();
   const todayHref = mounted
-    ? `/calendar?ym=${ym(now.getFullYear(), now.getMonth())}`
-    : "/calendar";
+    ? calHref(ym(now.getFullYear(), now.getMonth()))
+    : calHref(null);
 
   // Sidebar sections split at the viewer's local start of today, so an
   // appointment from earlier today still counts as "upcoming", not past.
@@ -173,7 +186,7 @@ export default function MonthCalendar({
     setDialog(null);
     if (initialApptId) {
       // Drop ?appt= so a refresh doesn't reopen the dialog.
-      router.replace(`/calendar?ym=${ym(year, month)}`, { scroll: false });
+      router.replace(calHref(ym(year, month)), { scroll: false });
     }
   }
 
@@ -184,9 +197,7 @@ export default function MonthCalendar({
     } else {
       // Navigate the grid to the appointment's month; ?appt= reopens the
       // edit dialog there with the chip visible behind it.
-      router.push(
-        `/calendar?ym=${ym(d.getFullYear(), d.getMonth())}&appt=${a.id}`,
-      );
+      router.push(calHref(ym(d.getFullYear(), d.getMonth()), { appt: a.id }));
     }
   }
 
@@ -196,7 +207,7 @@ export default function MonthCalendar({
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2">
             <a
-              href={`/calendar?ym=${ym(prev.getFullYear(), prev.getMonth())}`}
+              href={calHref(ym(prev.getFullYear(), prev.getMonth()))}
               className="px-3 py-1 border border-border rounded text-sm hover:bg-surface-muted"
             >
               ←
@@ -208,11 +219,30 @@ export default function MonthCalendar({
               Today
             </a>
             <a
-              href={`/calendar?ym=${ym(next.getFullYear(), next.getMonth())}`}
+              href={calHref(ym(next.getFullYear(), next.getMonth()))}
               className="px-3 py-1 border border-border rounded text-sm hover:bg-surface-muted"
             >
               →
             </a>
+            <label className="flex items-center gap-2 text-sm ml-2">
+              <span className="text-text-muted">Agent:</span>
+              <select
+                value={agentId ?? ""}
+                onChange={(e) => {
+                  const sp = new URLSearchParams({ ym: ym(year, month) });
+                  if (e.target.value) sp.set("agent", e.target.value);
+                  router.push(`/calendar?${sp.toString()}`);
+                }}
+                className="border border-border rounded-md px-2 py-1 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brand-accent"
+              >
+                <option value="">All</option>
+                {agents.map((a) => (
+                  <option key={a.id} value={a.id}>
+                    {a.label}
+                  </option>
+                ))}
+              </select>
+            </label>
           </div>
           <h3 className="text-xl font-semibold">
             {MONTH_NAMES[month]} {year}

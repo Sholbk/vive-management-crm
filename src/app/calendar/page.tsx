@@ -24,7 +24,7 @@ type Row = {
   status: string;
   notes: string | null;
   lead_id: string;
-  leads: { title: string | null } | null;
+  leads: { title: string | null; assigned_agent_id: string | null } | null;
 };
 
 type LeadRow = {
@@ -40,11 +40,17 @@ type TaskRow = {
   due_date: string;
   completed: boolean;
   lead_id: string;
-  leads: { title: string | null; first_name: string | null; last_name: string | null } | null;
+  assigned_to_profile_id: string | null;
+  leads: {
+    title: string | null;
+    first_name: string | null;
+    last_name: string | null;
+    assigned_agent_id: string | null;
+  } | null;
 };
 
 const TASK_SELECT =
-  "id, title, due_date, completed, lead_id, leads ( title, first_name, last_name )";
+  "id, title, due_date, completed, lead_id, assigned_to_profile_id, leads ( title, first_name, last_name, assigned_agent_id )";
 
 function leadLabel(
   lead: { title: string | null; first_name: string | null; last_name: string | null } | null,
@@ -73,7 +79,7 @@ function ymd(d: Date): string {
 }
 
 const APPT_SELECT =
-  "id, title, scheduled_at, status, notes, lead_id, leads ( title )";
+  "id, title, scheduled_at, status, notes, lead_id, leads ( title, assigned_agent_id )";
 
 function toAppointment(r: Row): CalendarAppointment {
   return {
@@ -90,9 +96,10 @@ function toAppointment(r: Row): CalendarAppointment {
 export default async function CalendarPage({
   searchParams,
 }: {
-  searchParams: Promise<{ ym?: string; appt?: string }>;
+  searchParams: Promise<{ ym?: string; appt?: string; agent?: string }>;
 }) {
-  const { ym, appt } = await searchParams;
+  const { ym, appt, agent } = await searchParams;
+  const agentId = agent || null;
   const { year, month } = parseYm(ym);
 
   // Fetch appointments that fall within the visible 6x7 grid: it starts on
@@ -164,11 +171,40 @@ export default async function CalendarPage({
         .returns<TaskRow[]>(),
     ]);
 
-  const appointments = (gridResult.data ?? []).map(toAppointment);
-  const upcoming = (upcomingResult.data ?? []).map(toAppointment);
-  const past = (pastResult.data ?? []).map(toAppointment);
-  const gridTasks = (gridTasksResult.data ?? []).map(toTask);
-  const openTasks = (openTasksResult.data ?? []).map(toTask);
+  // Agent filter, applied in JS: an appointment belongs to the agent on its
+  // opportunity; a task belongs to its own assignee, falling back to the
+  // opportunity's agent when unassigned.
+  const apptMatches = (r: Row) =>
+    !agentId || r.leads?.assigned_agent_id === agentId;
+  const taskMatches = (r: TaskRow) =>
+    !agentId ||
+    (r.assigned_to_profile_id ?? r.leads?.assigned_agent_id) === agentId;
+
+  const appointments = (gridResult.data ?? [])
+    .filter(apptMatches)
+    .map(toAppointment);
+  const upcoming = (upcomingResult.data ?? [])
+    .filter(apptMatches)
+    .map(toAppointment);
+  const past = (pastResult.data ?? []).filter(apptMatches).map(toAppointment);
+  const gridTasks = (gridTasksResult.data ?? [])
+    .filter(taskMatches)
+    .map(toTask);
+  const openTasks = (openTasksResult.data ?? [])
+    .filter(taskMatches)
+    .map(toTask);
+
+  const { data: agentRows } = await supabase
+    .from("profiles")
+    .select("id, full_name, email")
+    .eq("active", true)
+    .in("role", ["admin", "sales_agent"])
+    .order("full_name", { nullsFirst: false })
+    .returns<{ id: string; full_name: string | null; email: string | null }[]>();
+  const agents = (agentRows ?? []).map((p) => ({
+    id: p.id,
+    label: p.full_name || p.email || "Unnamed",
+  }));
 
   const leadOptions: LeadOption[] = (leadsResult.data ?? []).map((l) => ({
     id: l.id,
@@ -191,6 +227,8 @@ export default async function CalendarPage({
         tasks={gridTasks}
         openTasks={openTasks}
         leadOptions={leadOptions}
+        agents={agents}
+        agentId={agentId}
         initialApptId={appt}
       />
     </main>
