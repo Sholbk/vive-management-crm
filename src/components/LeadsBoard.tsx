@@ -254,8 +254,18 @@ export default function LeadsBoard({
           ))}
         </select>
         <Link
+          href={`/leads/list${
+            selectedDevelopment === "all"
+              ? ""
+              : `?pipeline=${encodeURIComponent(selectedDevelopment)}`
+          }`}
+          className="ml-auto px-3 py-1.5 border border-border text-sm font-semibold rounded-md hover:bg-surface-muted"
+        >
+          List View
+        </Link>
+        <Link
           href="/contacts/new"
-          className="ml-auto px-3 py-1.5 bg-brand-accent text-white text-sm font-semibold rounded-md hover:opacity-90"
+          className="px-3 py-1.5 bg-brand-accent text-white text-sm font-semibold rounded-md hover:opacity-90"
         >
           + Add Contact
         </Link>
