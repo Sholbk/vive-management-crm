@@ -5,6 +5,7 @@ import ExportButtons from "@/components/reports/ExportButtons";
 import FunnelPanel from "@/components/reports/FunnelPanel";
 import PipelineValuePanel from "@/components/reports/PipelineValuePanel";
 import SourcePanel from "@/components/reports/SourcePanel";
+import TagsPanel from "@/components/reports/TagsPanel";
 import DevelopmentPanel from "@/components/reports/DevelopmentPanel";
 import WeeklyNewLeadsPanel from "@/components/reports/WeeklyNewLeadsPanel";
 import { getReportData, type Range } from "@/lib/reports/queries";
@@ -110,6 +111,11 @@ export default async function ReportsPage({
             />
           </div>
 
+          <TagsPanel
+            byTag={data.byTag}
+            untaggedCount={data.untaggedCount}
+            total={data.totalLeads}
+          />
           <DevelopmentPanel rows={data.byDevelopment} />
           <WeeklyNewLeadsPanel weekly={data.weekly} />
         </div>
